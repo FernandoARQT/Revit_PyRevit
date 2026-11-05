@@ -1,0 +1,31 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="ARQ-T | Automatización CAVITY" Width="780" Height="720" WindowStartupLocation="CenterScreen" ResizeMode="CanResize" Background="#F5F6F8" FontFamily="Century Gothic" FontSize="12" Foreground="#25272B">
+<Window.Resources>
+ <Style TargetType="Button"><Setter Property="Background" Value="White"/><Setter Property="Foreground" Value="#25272B"/><Setter Property="BorderBrush" Value="#E2E4E8"/><Setter Property="Padding" Value="12,7"/><Setter Property="Cursor" Value="Hand"/></Style>
+ <Style TargetType="TextBox"><Setter Property="Background" Value="White"/><Setter Property="Foreground" Value="#25272B"/><Setter Property="BorderBrush" Value="#E2E4E8"/><Setter Property="Padding" Value="5,3"/></Style>
+ <Style TargetType="DataGrid"><Setter Property="Background" Value="White"/><Setter Property="AlternatingRowBackground" Value="#F5F6F8"/><Setter Property="BorderBrush" Value="#E2E4E8"/><Setter Property="HorizontalGridLinesBrush" Value="#E2E4E8"/></Style>
+ <Style TargetType="DataGridColumnHeader"><Setter Property="Background" Value="#25272B"/><Setter Property="Foreground" Value="White"/><Setter Property="FontWeight" Value="Bold"/><Setter Property="Padding" Value="8,6"/></Style>
+ <Style TargetType="DataGridRow"><Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#FFE5CF"/><Setter Property="Foreground" Value="#25272B"/></Trigger></Style.Triggers></Style>
+ <Style TargetType="ListBoxItem"><Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#FFE5CF"/><Setter Property="Foreground" Value="#25272B"/></Trigger></Style.Triggers></Style>
+</Window.Resources>
+
+  <StackPanel Margin="24">
+    <TextBlock Text="Automatización CAVITY" FontSize="25" FontWeight="Bold" Foreground="#25272B" Margin="0,0,0,18"/>
+    <TextBlock Name="FloorLabel" Text="Suelo: sin seleccionar" TextWrapping="Wrap"/>
+    <Button Name="SelectFloor" Content="Seleccionar suelo" HorizontalAlignment="Left" Padding="15,6" Margin="0,8,0,15"/>
+    <TextBlock Text="Tipo IGLU · Familia / Tipo / X × Y × Altura (mm)"/>
+    <ComboBox Name="Types" Margin="0,6,0,12" MinHeight="32"/>
+    <Grid Margin="0,5,0,15">
+      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+      <StackPanel Margin="0,0,12,0"><TextBlock Text="Separación (mm)"/><TextBox Name="Gap" Text="0" Padding="6"/></StackPanel>
+      <StackPanel Grid.Column="1" Margin="0,0,12,0"><TextBlock Text="Desfase desde cara inferior (mm)"/><TextBox Name="Offset" Text="0" Padding="6"/></StackPanel>
+      <StackPanel Grid.Column="2"><TextBlock Text="Orientación local"/><ComboBox Name="Orientation" SelectedIndex="0" Padding="6"><ComboBoxItem Content="Automática"/><ComboBoxItem Content="0°"/><ComboBoxItem Content="90°"/></ComboBox></StackPanel>
+    </Grid>
+    <Button Name="Calculate" Background="#F47721" FontWeight="Bold" Content="Calcular distribución" Padding="12,8" HorizontalAlignment="Left"/>
+    <Border Background="White" Padding="15" Margin="0,15,0,12" MinHeight="160"><TextBlock Name="Results" Text="Seleccione el suelo y calcule la distribución." TextWrapping="Wrap"/></Border>
+    <TextBlock Text="Retícula centrada en el suelo. Se excluyen piezas que invaden huecos o sobresalen. Base de las piezas en la cara inferior + desfase, manteniéndolas verticales." TextWrapping="Wrap" Foreground="#666666" Margin="0,0,0,15"/>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button Name="Generate" Background="#F47721" FontWeight="Bold" Content="Generar piezas" IsEnabled="False" Padding="20,9" Margin="0,0,12,0"/>
+      <Button Name="Cancel" Content="Cancelar" Padding="20,9" IsCancel="True"/>
+    </StackPanel>
+  </StackPanel>
+</Window>

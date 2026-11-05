@@ -1,0 +1,9 @@
+title: Despiece losa alveolar
+tooltip: |
+  Optimiza el despiece de un forjado rectangular en placas alveolares.
+
+  Elige dirección N-S o E-O, anchuras disponibles y holguras laterales. Compara las tres mejores combinaciones y previsualiza su disposición. Al generar, sustituye el forjado por placas independientes con el mismo tipo, nivel y desfase. Admite rectángulos horizontales alineados con los ejes del proyecto, sin huecos.
+author: ARQ-T
+context: doc-project
+engine:
+  clean: true

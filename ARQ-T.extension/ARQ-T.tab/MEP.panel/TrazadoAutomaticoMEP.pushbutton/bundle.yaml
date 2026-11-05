@@ -1,0 +1,9 @@
+title: Trazado automático MEP
+tooltip: |
+  Planifica recorridos de ventilación radial en el espacio disponible del modelo.
+
+  Selecciona el sistema de recuperación de calor. Calcula y valida rutas 3D desde distribuidores, compara alternativas y guarda propuestas. Modelar y conectar crea conductos de rutas aprobadas con tomas compatibles. Comprobar conexiones distingue tomas sin usar, extremos pendientes y conexiones equivocadas. No dimensiona por pérdidas de carga ni crea perforaciones.
+author: ARQ-T
+context: doc-project
+engine:
+  clean: true

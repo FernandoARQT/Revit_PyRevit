@@ -1,0 +1,10 @@
+title: Distribuir ventilación
+tooltip: |
+  Calcula, edita y distribuye las rejillas de ventilación de una vivienda.
+
+  Calcula los mínimos por uso de DB-HS 3 y equilibra los caudales. Revisa la propuesta en planta: arrastra, añade o elimina rejillas, ajusta su caudal y delimita zonas de cocina. Mantiene los ajustes manuales y los bloqueos al reoptimizar. Coloca o actualiza las rejillas sobre falsos techos horizontales o inclinados tras confirmar la propuesta. No crea conductos. Flow guarda el caudal de diseño y todavía no lo transmite al conector HVAC.
+author: ARQ-T
+context: doc-project
+engine:
+  clean: false
+  persistent: true

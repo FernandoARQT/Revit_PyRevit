@@ -1,0 +1,12 @@
+title: "Suelos\nautomáticos"
+tooltip: |
+  Crea suelos arquitectónicos a partir de las habitaciones de la planta activa.
+
+  Selecciona las habitaciones y elige tipo de suelo, nivel y desfase. Genera un suelo por habitación o superficies continuas conectadas por puertas, respetando los contornos y huecos. Requiere una vista de planta con nivel y fase definidos.
+author: ARQ-T
+min_revit_version: 2025
+max_revit_version: 2025
+context: doc-project
+engine:
+  clean: true
+  persistent: false

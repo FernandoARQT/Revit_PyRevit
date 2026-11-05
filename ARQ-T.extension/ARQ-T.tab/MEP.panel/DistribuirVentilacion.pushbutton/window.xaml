@@ -1,0 +1,82 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="ARQ-T | Distribuir ventilación" Width="1460" Height="900" MinWidth="1100" MinHeight="680" ResizeMode="CanResize" WindowStartupLocation="CenterScreen" Background="#F5F6F8" Foreground="#25272B" FontFamily="Century Gothic" FontSize="12">
+ <Window.Resources>
+  <Style TargetType="Button"><Setter Property="Background" Value="White"/><Setter Property="Foreground" Value="#25272B"/><Setter Property="BorderBrush" Value="#E2E4E8"/><Setter Property="Padding" Value="12,7"/><Setter Property="Margin" Value="0,0,7,0"/><Setter Property="Cursor" Value="Hand"/></Style>
+  <Style TargetType="TextBox"><Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#E2E4E8"/><Setter Property="Padding" Value="5,3"/></Style>
+  <Style TargetType="ComboBox"><Setter Property="MinHeight" Value="28"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
+  <Style TargetType="DataGrid"><Setter Property="Background" Value="White"/><Setter Property="AlternatingRowBackground" Value="#F5F6F8"/><Setter Property="BorderBrush" Value="#E2E4E8"/><Setter Property="HorizontalGridLinesBrush" Value="#E2E4E8"/><Setter Property="AutoGenerateColumns" Value="False"/><Setter Property="CanUserAddRows" Value="False"/><Setter Property="CanUserDeleteRows" Value="False"/><Setter Property="SelectionMode" Value="Single"/><Setter Property="RowHeaderWidth" Value="0"/><Setter Property="RowHeight" Value="30"/></Style>
+  <Style TargetType="DataGridColumnHeader"><Setter Property="Background" Value="#25272B"/><Setter Property="Foreground" Value="White"/><Setter Property="FontWeight" Value="Bold"/><Setter Property="Padding" Value="7,7"/></Style>
+  <Style TargetType="DataGridRow"><Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#FFE5CF"/><Setter Property="Foreground" Value="#25272B"/></Trigger></Style.Triggers></Style>
+  <Style TargetType="Menu"><Setter Property="Background" Value="White"/><Setter Property="Padding" Value="4"/></Style>
+ </Window.Resources>
+ <Grid Margin="18">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <DockPanel Margin="0,0,0,12"><TextBlock Text="Distribuir ventilación" FontSize="24" FontWeight="Bold"/><TextBlock Name="DocumentLabel" HorizontalAlignment="Right" Foreground="#707782" VerticalAlignment="Center"/></DockPanel>
+  <Grid Grid.Row="1" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="1.6*"/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition Width="1.3*"/></Grid.ColumnDefinitions>
+   <StackPanel Margin="0,0,12,0"><TextBlock Text="Vivienda"/><ComboBox Name="Housing" IsEditable="True"/></StackPanel>
+   <StackPanel Grid.Column="1" Margin="0,0,12,0"><TextBlock Text="Fase"/><ComboBox Name="Phase"/></StackPanel>
+   <StackPanel Grid.Column="2" Margin="0,0,12,0"><TextBlock Text="Ámbito"/><ComboBox Name="Scope" SelectedIndex="0"><ComboBoxItem Content="Vivienda completa"/><ComboBoxItem Content="Una planta"/><ComboBoxItem Content="Selección de Revit"/></ComboBox></StackPanel>
+   <StackPanel Grid.Column="3"><TextBlock Text="Planta"/><ComboBox Name="Level"/></StackPanel>
+  </Grid>
+  <TabControl Name="Tabs" Grid.Row="2">
+   <TabItem Header="Habitaciones"><DockPanel Margin="10">
+    <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10"><Button Name="Analyze" Content="Actualizar"/><Button Name="IncludeAll" Content="Todas"/><Button Name="IncludeNone" Content="Ninguna"/><Button Name="FromSelection" Content="Usar selección Revit"/><TextBlock Text="Principal:" VerticalAlignment="Center" Margin="10,0,5,0"/><ComboBox Name="MainBedroom" Width="190"/><Button Name="SetMainBedroom" Content="Asignar"/></WrapPanel>
+    <DataGrid Name="Rooms"><DataGrid.Columns>
+     <DataGridCheckBoxColumn Header="Vivienda" Binding="{Binding Include}"/>
+     <DataGridTextColumn Header="N.º" Binding="{Binding Number}" IsReadOnly="True"/>
+     <DataGridTextColumn Header="Planta" Binding="{Binding Level}" IsReadOnly="True"/>
+     <DataGridTextColumn Header="Habitación" Binding="{Binding Name}" IsReadOnly="True" Width="*"/>
+     <DataGridComboBoxColumn x:Name="UseColumn" Header="Uso" SelectedItemBinding="{Binding Use}" Width="150"/>
+     <DataGridTextColumn Header="m²" Binding="{Binding Area}" IsReadOnly="True"/>
+     <DataGridTextColumn Header="Falso techo" Binding="{Binding Ceilings}" IsReadOnly="True" Width="180"/>
+    </DataGrid.Columns></DataGrid>
+   </DockPanel></TabItem>
+   <TabItem Header="Caudales"><DockPanel Margin="10">
+    <TextBlock DockPanel.Dock="Top" Text="Edite el diseño de cada estancia y recalcule. Los mínimos se mantienen según su uso." Foreground="#707782" Margin="0,0,0,10"/>
+    <DataGrid Name="Flows"><DataGrid.Columns>
+     <DataGridTextColumn Header="Planta" Binding="{Binding Level}" IsReadOnly="True"/>
+     <DataGridTextColumn Header="Habitación" Binding="{Binding Room}" IsReadOnly="True" Width="*"/>
+     <DataGridTextColumn Header="Tipo" Binding="{Binding Role}" IsReadOnly="True"/>
+     <DataGridTextColumn Header="Mínimo L/s" Binding="{Binding Minimum}" IsReadOnly="True"/>
+     <DataGridTextColumn Header="Diseño L/s" Binding="{Binding Requested}"/>
+     <DataGridTextColumn x:Name="FlowCountColumn" Header="Rejillas" Binding="{Binding Count}"/>
+     <DataGridTextColumn Header="Asignado L/s" Binding="{Binding Assigned}" IsReadOnly="True"/>
+    </DataGrid.Columns></DataGrid>
+   </DockPanel></TabItem>
+   <TabItem Header="Distribución"><Grid Margin="10">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="620" MinWidth="460"/><ColumnDefinition Width="7"/><ColumnDefinition Width="*" MinWidth="350"/></Grid.ColumnDefinitions>
+    <DockPanel Grid.ColumnSpan="3" Margin="0,0,0,10">
+     <StackPanel DockPanel.Dock="Left" Orientation="Horizontal"><Button Name="AddSupply" Content="+ Impulsión"/><Button Name="AddExtract" Content="+ Extracción"/><Button Name="DeleteTerminal" Content="Eliminar"/></StackPanel>
+     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right"><Button Name="FitPlan" Content="Ajustar plano"/><Menu><MenuItem Header="Más opciones">
+      <MenuItem Name="Undo" Header="Deshacer" InputGestureText="Ctrl+Z"/><MenuItem Name="Redo" Header="Rehacer" InputGestureText="Ctrl+Y"/><Separator/>
+      <MenuItem Name="Rebalance" Header="Equilibrar caudales"/><MenuItem Name="RebalanceAll" Header="Equilibrar incluyendo caudales manuales"/>
+      <MenuItem Name="Calculate" Header="Recalcular diseño por estancia"/>
+      <MenuItem Name="ReoptFree" Header="Reoptimizar posiciones automáticas"/><MenuItem Name="ReoptRoom" Header="Reoptimizar esta habitación"/>
+      <MenuItem Header="Cocina"><MenuItem Name="KitchenPoint" Header="Marcar referencia"/><MenuItem Name="KitchenPolygon" Header="Dibujar zona"/><MenuItem Name="FinishKitchen" Header="Terminar zona" InputGestureText="Enter"/><MenuItem Name="DetectKitchen" Header="Usar cocina detectada"/><Separator/><MenuItem Header="Zona seleccionada"><ComboBox Name="Zones" Width="190"/></MenuItem><MenuItem Name="DeleteZone" Header="Eliminar zona seleccionada"/></MenuItem>
+      <MenuItem Header="Rejilla seleccionada"><MenuItem Name="LockPosition" Header="Bloquear posición"/><MenuItem Name="LockFlow" Header="Bloquear caudal"/><MenuItem Name="LockFull" Header="Bloquear todo"/><Separator/><MenuItem Name="NextAlternative" Header="Probar siguiente alternativa"/><MenuItem Name="ConfirmFunction" Header="Revisar avisos funcionales"/></MenuItem>
+      <Separator/><MenuItem Name="LoadDraft" Header="Recuperar propuesta guardada"/><MenuItem Name="ExportPreview" Header="Guardar imagen del plano"/><MenuItem Name="Validate" Header="Validar propuesta"/>
+     </MenuItem></Menu></StackPanel>
+    </DockPanel>
+    <DataGrid Name="Terminals" Grid.Row="1" Margin="0,0,5,0" ToolTip="Doble clic para editar tipo, caudal o coordenadas. También puede seleccionar y arrastrar en el plano."><DataGrid.Columns>
+     <DataGridTextColumn Header="ID" Binding="{Binding Label}" IsReadOnly="True" Width="43"/>
+     <DataGridTextColumn Header="Habitación" Binding="{Binding Room}" IsReadOnly="True" Width="*" MinWidth="100"/>
+     <DataGridComboBoxColumn x:Name="TerminalTypeColumn" Header="Tipo" SelectedItemBinding="{Binding Role}" Width="105"/>
+     <DataGridTextColumn Header="L/s" Binding="{Binding Flow}" Width="65"/>
+     <DataGridTextColumn Header="X · mm" Binding="{Binding X}" Width="83"/>
+     <DataGridTextColumn Header="Y · mm" Binding="{Binding Y}" Width="83"/>
+     <DataGridTextColumn Header="Z · mm" Binding="{Binding Z}" IsReadOnly="True" Width="83"/>
+    </DataGrid.Columns></DataGrid>
+    <GridSplitter Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#E2E4E8" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"/>
+    <Border Grid.Row="1" Grid.Column="2" Background="White" BorderBrush="#E2E4E8" BorderThickness="1"><Canvas Name="Preview" Focusable="True" ClipToBounds="True"/></Border>
+    <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Margin="0,8,0,0"><TextBlock Name="SelectedInfo" Foreground="#666666" Text="Edite en la tabla o arrastre una rejilla en el plano. Rueda: zoom · botón derecho: desplazar." TextWrapping="Wrap"/><TextBlock Name="CandidateInfo" Foreground="#707782" TextWrapping="Wrap"/></StackPanel>
+   </Grid></TabItem>
+   <TabItem Header="Ajustes"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="15">
+    <WrapPanel><StackPanel Width="170" Margin="0,0,15,10"><TextBlock Text="Muestreo · mm"/><TextBox Name="Resolution"/></StackPanel><StackPanel Width="170" Margin="0,0,15,10"><TextBlock Text="Distancia a paredes · mm"/><TextBox Name="Wall"/></StackPanel><StackPanel Width="170" Margin="0,0,15,10"><TextBlock Text="Entre rejillas · mm"/><TextBox Name="Spacing"/></StackPanel><StackPanel Width="170" Margin="0,0,15,10"><TextBlock Text="Tolerancia · mm"/><TextBox Name="Tolerance"/></StackPanel></WrapPanel>
+    <Expander Header="Preferencias de cálculo" Margin="0,5,0,15"><StackPanel><TextBlock Text="Pesos geométricos"/><TextBox Name="Weights"/><Button Name="Save" Content="Guardar ajustes" HorizontalAlignment="Left" Margin="0,10,0,0"/></StackPanel></Expander>
+    <Expander Header="Elementos existentes"><StackPanel><WrapPanel Margin="0,10,0,10"><Button Name="RefreshOwned" Content="Consultar"/><Button Name="Lock" Content="Bloquear"/><Button Name="Unlock" Content="Desbloquear"/></WrapPanel><DataGrid Name="Owned" Height="180" IsReadOnly="True"><DataGrid.Columns><DataGridTextColumn Header="ElementId" Binding="{Binding Id}"/><DataGridTextColumn Header="Habitación" Binding="{Binding Room}" Width="*"/><DataGridTextColumn Header="Tipo" Binding="{Binding Role}"/><DataGridTextColumn Header="Bloqueado" Binding="{Binding Locked}"/></DataGrid.Columns></DataGrid></StackPanel></Expander>
+   </StackPanel></ScrollViewer></TabItem>
+  </TabControl>
+  <Expander Name="Details" Grid.Row="3" Header="Avisos y detalles" Margin="0,8,0,0"><TextBox Name="Issues" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" MaxHeight="130" Background="White"/></Expander>
+  <DockPanel Grid.Row="4" Margin="0,12,0,0"><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Name="Optimize" Content="Calcular y distribuir"/><Button Name="Place" Content="Aplicar en Revit" Background="#F47721" FontWeight="Bold" IsEnabled="False"/><Button Name="Cancel" Content="Cerrar" Margin="0"/></StackPanel><TextBlock Name="Totals" Text="Seleccione las habitaciones de la vivienda." VerticalAlignment="Center" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,14,0"/></DockPanel>
+ </Grid>
+</Window>

@@ -1,0 +1,1691 @@
+ROL
+
+Actúa como director técnico de desarrollo especializado en:
+
+- Autodesk Revit API 2025.
+- Python y pyRevit.
+- Automatización BIM MEP.
+- Geometría computacional.
+- Ventilación residencial conforme al CTE DB-HS 3.
+- Integración de herramientas Revit con Codex mediante MCP.
+
+Debes implementar una herramienta funcional en nuestro
+repositorio existente.
+
+No quiero únicamente pseudocódigo o una propuesta.
+
+Inspecciona el entorno, desarrolla el código, integra
+la herramienta y realiza las pruebas posibles.
+
+No modifiques herramientas existentes que no estén
+relacionadas con este desarrollo.
+
+
+==================================================
+1. OBJETIVO
+==================================================
+
+Crear una herramienta denominada:
+
+"Distribuir ventilación"
+
+Ubicación:
+
+Pestaña corporativa existente de ARQ-T.
+Nuevo panel denominado "MEP".
+
+Si el panel MEP ya existe, reutilizarlo.
+
+La herramienta analizará automáticamente las
+habitaciones de una vivienda unifamiliar y realizará:
+
+1. Identificación de las habitaciones.
+2. Clasificación por su nombre.
+3. Cálculo de caudales conforme al CTE DB-HS 3.
+4. Equilibrado de impulsión y extracción.
+5. Selección del número de terminales.
+6. Identificación del falso techo de cada habitación.
+7. Optimización geométrica de las posiciones.
+8. Colocación de las rejillas en Revit.
+9. Asignación del caudal individual mediante Flow.
+10. Validación del resultado.
+
+Debe funcionar mediante:
+
+A. Botón de pyRevit con interfaz gráfica.
+
+B. Invocación programática desde Codex a través
+   del MCP existente.
+
+Ambos métodos deben compartir exactamente
+la misma lógica de cálculo y colocación.
+
+
+==================================================
+2. ALCANCE
+==================================================
+
+Implementar exclusivamente la distribución
+y colocación de terminales de ventilación.
+
+NO implementar todavía:
+
+- Trazado de conductos.
+- Algoritmos A*.
+- Creación de redes MEP.
+- Dimensionado de conductos.
+- Creación de codos.
+- Modificaciones estructurales.
+- Perforaciones.
+- Modificación de falsos techos.
+- Simulación CFD.
+
+Preparar la estructura para incorporar
+posteriormente estas funcionalidades.
+
+El resultado debe ser una vivienda con
+sus terminales de impulsión y extracción
+correctamente distribuidos y con sus
+caudales de diseño asignados.
+
+
+==================================================
+3. INFORMACIÓN DISPONIBLE EN REVIT
+==================================================
+
+Considerar las siguientes condiciones:
+
+- Revit 2025.
+- Vivienda unifamiliar.
+- Habitaciones correctamente modeladas.
+- Habitaciones correctamente nombradas.
+- Habitaciones delimitadas en planta.
+- Falsos techos modelados como elementos Ceiling.
+- Puertas modeladas.
+- Mobiliario opcional.
+- Caudales no definidos previamente.
+- No existen inicialmente conductos de ventilación.
+
+No exigir que los volúmenes 3D de las habitaciones
+alcancen la altura de los falsos techos.
+
+Utilizar los contornos en planta de las Rooms
+y la geometría real de los Ceilings.
+
+
+==================================================
+4. FAMILIAS DE TERMINALES
+==================================================
+
+En el proyecto existe la familia:
+
+"Rejillas de ventilación (Rejilla de admisión techo)"
+
+Contiene dos tipos:
+
+IMPULSIÓN:
+"Rejilla impulsión"
+
+EXTRACCIÓN:
+"Rejilla extracción"
+
+Identificadores conocidos del proyecto:
+
+Family ElementId: 2658547
+
+Tipo impulsión:
+ElementId 2741683
+
+Tipo extracción:
+ElementId 2659214
+
+No depender exclusivamente de estos ElementId.
+
+Localizar los tipos mediante sus nombres
+y validar categoría y pertenencia familiar.
+
+Categoría:
+
+OST_DuctTerminal.
+
+Ambos tipos comparten un parámetro de instancia:
+
+"Flow"
+
+Características verificadas:
+
+- Tipo de dato: Air Flow.
+- Unidad de presentación: L/s.
+- Parámetro de instancia.
+- Valor predeterminado: 0 L/s.
+- No compartido.
+- Editable en la definición familiar.
+- Sin fórmula.
+
+IMPORTANTE:
+
+El parámetro Flow todavía NO está asociado
+al parámetro de caudal del conector HVAC.
+
+En esta versión se utilizará Flow para
+almacenar el caudal de diseño de cada instancia.
+
+No afirmar que la red MEP está correctamente
+dimensionada ni que los caudales se transmiten
+a conectores y conductos.
+
+Registrar esta limitación.
+
+No editar las familias.
+
+No crear familias nuevas.
+
+No modificar sus tipos.
+
+
+==================================================
+5. COLOCACIÓN EN NIVEL Y DESFASE
+==================================================
+
+REQUISITO FUNDAMENTAL.
+
+La posición vertical de cada rejilla debe
+corresponder exactamente al falso techo
+de la habitación donde se encuentra.
+
+NO utilizar una altura fija general.
+
+NO utilizar simplemente la altura de la Room.
+
+NO utilizar arbitrariamente otros elementos
+como anfitriones.
+
+Para cada habitación:
+
+1. Localizar el falso techo correspondiente.
+
+2. Obtener el nivel de referencia del falso techo.
+
+3. Obtener la cota real de su cara inferior.
+
+4. Calcular la cota de inserción de la rejilla.
+
+5. Asignar el nivel correspondiente.
+
+6. Asignar el desfase respecto a ese nivel.
+
+7. Verificar que la rejilla queda correctamente
+   situada en el plano inferior del falso techo.
+
+La relación geométrica debe ser:
+
+Z_rejilla = Z_cara_inferior_falso_techo
+
+Aplicando la corrección necesaria si el punto
+de inserción real de la familia no coincide
+con su plano visible de instalación.
+
+El desfase será:
+
+Desfase_rejilla =
+    Z_insercion_rejilla - Z_nivel_referencia
+
+El resultado debe expresarse en las unidades
+internas de Revit mediante UnitUtils.
+
+Si el falso techo tiene:
+
+Nivel: 01 Planta primera.
+Cara inferior: +2,60 m respecto a ese nivel.
+
+La rejilla debe quedar:
+
+Nivel: 01 Planta primera.
+Elevación correspondiente: +2,60 m.
+
+Este ejemplo es ilustrativo.
+
+No asumir que el parámetro de desfase
+del Ceiling equivale directamente
+a la cota de su cara inferior.
+
+Obtener la posición geométrica real.
+
+IMPORTANTE SOBRE EL TIPO DE FAMILIA:
+
+Antes de programar la inserción, inspeccionar
+FamilyPlacementType y los requisitos reales
+de alojamiento de la familia.
+
+La existencia de parámetros de nivel y desfase
+no demuestra por sí sola que la familia
+sea completamente independiente de anfitrión.
+
+Si la familia permite colocación basada en nivel,
+utilizar dicha modalidad.
+
+Si requiere anfitrión o plano de trabajo,
+no intentar forzar un método incompatible.
+
+En ese caso:
+
+- Determinar la alternativa API correcta.
+- Mantener la misma posición vertical requerida.
+- No utilizar un elemento ajeno como anfitrión.
+- Informar si la familia necesita adaptación.
+
+La herramienta no debe colocar terminales
+sobre sólidos topográficos ni sobre elementos
+seleccionados accidentalmente.
+
+La prioridad es una colocación geométricamente
+correcta y compatible con el comportamiento
+real de la familia.
+
+
+==================================================
+6. LECTURA DE HABITACIONES
+==================================================
+
+Implementar:
+
+analyze_rooms()
+
+Utilizar FilteredElementCollector.
+
+Categoría:
+
+OST_Rooms.
+
+Obtener:
+
+- ElementId.
+- UniqueId.
+- Nombre.
+- Número.
+- Nivel.
+- Superficie.
+- Contorno.
+- Centroide.
+- Límites interiores.
+- Puertas relacionadas.
+
+Utilizar Room.GetBoundarySegments().
+
+No utilizar bounding boxes como sustitutos
+del contorno real.
+
+Admitir habitaciones:
+
+- Rectangulares.
+- Poligonales.
+- En forma de L.
+- Con retranqueos.
+- Con límites curvos.
+- Con varios contornos.
+
+No asumir geometría convexa.
+
+Utilizar coordenadas internas de Revit,
+con conversiones de unidades controladas.
+
+Validar Rooms sin superficie o sin
+contorno geométrico correcto.
+
+Esas Rooms deben generar incidencias
+y quedar excluidas de la colocación.
+
+
+==================================================
+7. CLASIFICACIÓN POR NOMBRE
+==================================================
+
+Considerar que los nombres de las habitaciones
+identifican correctamente su función.
+
+No utilizar IA para interpretar nombres
+inequívocos.
+
+Clasificar automáticamente:
+
+DORMITORIO PRINCIPAL:
+Impulsión.
+
+DORMITORIOS SECUNDARIOS:
+Impulsión.
+
+SALÓN:
+Impulsión.
+
+COMEDOR:
+Impulsión según uso y configuración.
+
+SALÓN-COMEDOR:
+Un único local seco combinado.
+
+DESPACHO:
+Local seco asimilable según DB-HS 3.
+
+COCINA:
+Extracción general.
+
+BAÑO:
+Extracción.
+
+ASEO:
+Extracción.
+
+LAVADERO:
+Analizar como posible local húmedo,
+según configuración y requisitos aplicables.
+
+PASILLO:
+Normalmente transferencia.
+
+DISTRIBUIDOR:
+Normalmente transferencia.
+
+VESTIDOR:
+No asignar automáticamente un caudal
+equivalente al de un dormitorio.
+
+OTROS:
+Clasificación manual si resulta necesaria.
+
+Normalizar:
+
+- Mayúsculas.
+- Minúsculas.
+- Tildes.
+- Espacios.
+- Variaciones habituales.
+
+Resolver nombres compuestos.
+
+Especialmente:
+
+"Salón-comedor" no son dos estancias.
+
+"Cocina-salón" requiere considerar
+los usos seco y húmedo por separado.
+
+No clasificarlo exclusivamente
+como salón o cocina.
+
+Si el uso no puede resolverse
+de manera inequívoca:
+
+Solicitar clasificación.
+
+No inventar una categoría.
+
+
+==================================================
+8. IDENTIFICACIÓN DE LA VIVIENDA
+==================================================
+
+Los caudales deben calcularse considerando
+la vivienda completa.
+
+No calcular el número de dormitorios
+de manera independiente por plantas.
+
+Permitir:
+
+- Vivienda completa.
+- Planta seleccionada.
+- Habitaciones seleccionadas.
+
+Cuando se selecciona únicamente una planta,
+el cálculo normativo seguirá utilizando
+el conjunto de habitaciones de la vivienda.
+
+La selección parcial solamente limita
+la colocación física de las rejillas.
+
+No debe alterar el dimensionamiento global.
+
+Si el proyecto contiene varias viviendas,
+identificar o solicitar su agrupación.
+
+No mezclar caudales de viviendas diferentes.
+
+
+==================================================
+9. CÁLCULO CTE DB-HS 3
+==================================================
+
+Implementar:
+
+calculate_airflows()
+
+Utilizar el procedimiento de ventilación
+de caudal constante de DB-HS 3.
+
+Referencia:
+
+Tabla 2.1.
+
+Valores mínimos en L/s:
+
+VIVIENDA DE 0 O 1 DORMITORIOS:
+
+Dormitorio principal: 8.
+Salón/comedor: 6.
+Extracción mínima total: 12.
+Extracción mínima por local húmedo: 6.
+
+VIVIENDA DE 2 DORMITORIOS:
+
+Dormitorio principal: 8.
+Otros dormitorios: 4.
+Salón/comedor: 8.
+Extracción mínima total: 24.
+Extracción mínima por local húmedo: 7.
+
+VIVIENDA DE 3 O MÁS DORMITORIOS:
+
+Dormitorio principal: 8.
+Otros dormitorios: 4.
+Salón/comedor: 10.
+Extracción mínima total: 33.
+Extracción mínima por local húmedo: 8.
+
+Aplicar también las notas de la tabla.
+
+Para una vivienda sin dormitorios,
+no inventar un dormitorio principal.
+
+Resolver conforme a los usos reales
+de sus locales y las reglas aplicables.
+
+Los locales secos de usos combinados
+adoptarán el criterio del uso más exigente.
+
+Cuando convivan usos secos y húmedos
+en un mismo espacio, ambos deberán
+quedar correctamente considerados.
+
+El sistema de extracción específico
+de la zona de cocción queda excluido
+de esta automatización.
+
+No añadir automáticamente los 50 L/s
+de extracción específica de cocina
+al caudal del recuperador.
+
+El cálculo debe mostrar:
+
+- Caudal mínimo de cada estancia.
+- Caudal de diseño.
+- Caudal total de impulsión.
+- Caudal total de extracción.
+
+Diferenciar claramente mínimos normativos
+y valores adoptados tras equilibrado.
+
+
+==================================================
+10. EQUILIBRADO DE CAUDALES
+==================================================
+
+Implementar:
+
+balance_airflows()
+
+Calcular:
+
+Q_imp_min =
+    suma de mínimos de locales secos.
+
+Q_ext_min =
+    máximo entre:
+    a) mínimo global de extracción.
+    b) suma de mínimos de locales húmedos.
+
+Definir:
+
+Q_diseño = max(Q_imp_min, Q_ext_min)
+
+Distribuir los incrementos necesarios
+sin reducir ningún mínimo.
+
+Conseguir:
+
+SUMA IMPULSIÓN = SUMA EXTRACCIÓN
+
+Utilizar inicialmente incrementos
+proporcionales a los caudales mínimos,
+respetando una hipótesis coherente
+de circulación de aire entre locales.
+
+No aplicar esta distribución a ciegas:
+comprobar que el esquema de transferencias
+resultante sea razonable.
+
+Si existen varias distribuciones válidas,
+priorizar la que mantenga caudales
+más próximos a sus mínimos.
+
+Permitir ajustes manuales.
+
+Reequilibrar después de cualquier ajuste.
+
+Mantener cálculos en L/s.
+
+Convertir a m³/h para visualización:
+
+m³/h = L/s × 3,6
+
+No introducir redondeos que provoquen
+incumplimientos normativos.
+
+Si una vivienda presenta una distribución
+que no puede equilibrarse con las reglas
+adoptadas, informar y solicitar revisión.
+
+
+==================================================
+11. DISTRIBUCIÓN DEL AIRE ENTRE ESTANCIAS
+==================================================
+
+Analizar las puertas y pasos entre habitaciones.
+
+Identificar:
+
+- Locales secos.
+- Locales húmedos.
+- Distribuidores.
+- Pasillos.
+- Puertas de comunicación.
+
+Crear un grafo espacial de habitaciones.
+
+Utilizar las relaciones espaciales
+de las puertas cuando sean accesibles.
+
+Considerar el flujo general:
+
+Impulsión en locales secos.
+
+Transferencia a través de zonas de paso.
+
+Extracción en locales húmedos.
+
+El algoritmo de ubicación debe
+tener en cuenta las puertas.
+
+No asumir que la mera existencia
+de una puerta garantiza una
+abertura de transferencia suficiente.
+
+Informar cuando sea necesario comprobar
+las holguras o aberturas de paso.
+
+No modificar puertas.
+
+
+==================================================
+12. NÚMERO DE REJILLAS POR ESTANCIA
+==================================================
+
+Implementar:
+
+determine_terminal_count()
+
+Para la primera versión:
+
+Colocar inicialmente una boca por
+estancia que requiera impulsión
+o extracción.
+
+Permitir que una estancia tenga
+varias bocas.
+
+No crear rejillas en estancias
+que solamente funcionen como transferencia.
+
+No afirmar que una boca es suficiente
+para cualquier caudal.
+
+Si existen datos de fabricante:
+
+Utilizar:
+
+- Caudal admisible.
+- Pérdida de carga.
+- Nivel acústico.
+- Características de difusión.
+
+Si no existen:
+
+Mantener una boca inicial por estancia
+y marcar la selección como provisional.
+
+Permitir aumentar el número de bocas
+manualmente.
+
+Para salones grandes o irregulares,
+proponer varias cuando la distribución
+geométrica lo aconseje.
+
+No inventar capacidades máximas
+de caudal para las familias existentes.
+
+Cuando una estancia tenga N terminales:
+
+Flow_terminal = Q_estancia / N
+
+Salvo distribución explícitamente
+diferenciada.
+
+Garantizar:
+
+SUMA Flow_terminal = Q_estancia
+
+
+==================================================
+13. LOCALIZACIÓN DE FALSOS TECHOS
+==================================================
+
+Implementar:
+
+find_room_ceilings()
+
+Para cada habitación:
+
+1. Obtener su contorno.
+2. Obtener los falsos techos próximos.
+3. Proyectar los techos en planta.
+4. Intersectar sus superficies
+   con el contorno de la habitación.
+5. Identificar las zonas cubiertas.
+6. Obtener las cotas reales inferiores.
+
+No asociar un falso techo únicamente
+porque su bounding box interseque
+con la de una habitación.
+
+Comprobar la superposición geométrica real.
+
+Permitir:
+
+- Un techo por estancia.
+- Varios paños de techo.
+- Diferentes alturas.
+- Techos parciales.
+- Habitaciones irregulares.
+
+Si una estancia no tiene falso techo:
+
+No colocar la rejilla automáticamente.
+
+Registrar incidencia.
+
+Si existen varios paños:
+
+Evaluar cuáles son aptos.
+
+Priorizar los que permitan una
+distribución adecuada del aire.
+
+Si existen techos inclinados,
+resolverlos correctamente o
+devolver una incidencia explícita.
+
+No introducir una cota aproximada
+cuando se conoce la geometría real.
+
+
+==================================================
+14. OPTIMIZACIÓN DE POSICIONES
+==================================================
+
+Implementar:
+
+optimize_terminal_positions()
+
+La búsqueda debe realizarse sobre
+las superficies útiles de falso techo.
+
+Utilizar muestreo bidimensional.
+
+Resolución inicial:
+
+250 mm.
+
+Configurable.
+
+No es necesario ejecutar A*
+ni generar una malla tridimensional.
+
+Para cada estancia:
+
+1. Obtener su polígono interior.
+2. Identificar los techos disponibles.
+3. Generar posiciones candidatas.
+4. Descartar posiciones inválidas.
+5. Evaluar las posiciones restantes.
+6. Seleccionar la mejor.
+7. Conservar dos alternativas adicionales.
+
+Devolver preferentemente tres
+posiciones candidatas por terminal.
+
+No inventar alternativas si
+no existen puntos válidos.
+
+
+==================================================
+15. CRITERIOS DE IMPULSIÓN
+==================================================
+
+DORMITORIOS
+
+Priorizar:
+
+- Buena distribución espacial.
+- Separación razonable de paredes.
+- Relación adecuada con la puerta.
+- Recorrido favorable del aire
+  hacia la zona de transferencia.
+- Ausencia de interferencias.
+- Ubicación constructivamente viable.
+
+No colocar automáticamente
+la rejilla junto a la puerta.
+
+No colocarla automáticamente
+en el centro geométrico.
+
+No considerar que el punto
+más alejado de la puerta
+es necesariamente el mejor.
+
+Si existe mobiliario:
+
+Evitar corrientes molestas
+sobre camas y zonas ocupadas.
+
+Si no existe mobiliario:
+
+No inventar posiciones de camas.
+
+Utilizar criterios geométricos
+y marcar la propuesta como provisional.
+
+
+SALONES Y COMEDORES
+
+Priorizar:
+
+- Distribución homogénea aproximada.
+- Cobertura de zonas alejadas.
+- Separación entre terminales.
+- Ausencia de acumulaciones.
+- Relación con puertas de transferencia.
+
+Si existen varias bocas:
+
+Optimizar su distribución conjunta.
+
+No seleccionar simplemente
+los N mejores puntos individuales
+si quedan agrupados.
+
+
+DESPACHOS
+
+Aplicar criterios equivalentes
+a otros locales secos.
+
+Si hay mobiliario identificado,
+considerar zonas de permanencia.
+
+
+==================================================
+16. CRITERIOS DE EXTRACCIÓN
+==================================================
+
+BAÑOS
+
+Priorizar:
+
+- Posiciones que favorezcan
+  la extracción de humedad.
+- Relación con la entrada de aire.
+- Proximidad razonable a zonas húmedas.
+- Evitar interferencias constructivas.
+
+Si existe una ducha o bañera
+identificable:
+
+Considerar su ubicación.
+
+Si no existe:
+
+Utilizar criterios geométricos.
+
+
+ASEOS
+
+Priorizar:
+
+- Extracción de olores.
+- Recorrido del aire desde la puerta.
+- Posiciones constructivamente viables.
+
+
+COCINAS
+
+Colocar extracción general.
+
+No confundir con la extracción
+específica de la campana.
+
+Considerar:
+
+- Geometría.
+- Puertas.
+- Mobiliario existente.
+- Obstáculos de techo.
+
+No colocar automáticamente
+la extracción sobre la placa
+de cocción.
+
+
+CONDICIONES NORMATIVAS
+
+Aplicar las condiciones de DB-HS 3
+relativas a aberturas de extracción.
+
+Entre ellas:
+
+- Distancia al techo inferior a 200 mm.
+- Distancia a rincones o esquinas
+  verticales superior a 100 mm.
+
+Comprobar su aplicabilidad exacta
+a los terminales utilizados.
+
+La colocación en falso techo
+debe cumplir la condición vertical
+cuando corresponda.
+
+No confundir estas exigencias
+con una separación genérica
+de 300 mm respecto a todas las paredes.
+
+
+==================================================
+17. EVALUACIÓN DE CANDIDATOS
+==================================================
+
+Implementar una función de puntuación
+determinista y configurable.
+
+Criterios:
+
+A. Distribución geométrica del aire.
+
+B. Relación con puertas.
+
+C. Separación a paredes.
+
+D. Distribución entre varias rejillas.
+
+E. Interferencias.
+
+F. Compatibilidad con falso techo.
+
+G. Espacio disponible para
+   futura conexión.
+
+H. Integración arquitectónica.
+
+Separar:
+
+RESTRICCIONES OBLIGATORIAS
+
+Y
+
+CRITERIOS DE PREFERENCIA.
+
+Una posición geométricamente inválida
+no puede aceptarse por tener
+una puntuación alta.
+
+No inventar una simulación CFD.
+
+La puntuación representa
+una evaluación geométrica preliminar,
+no una predicción física certificada.
+
+Permitir configurar los pesos.
+
+Los resultados deben poder explicarse.
+
+
+==================================================
+18. COMPROBACIÓN DE INTERFERENCIAS
+==================================================
+
+Antes de colocar una rejilla:
+
+Comprobar el volumen ocupado
+por su geometría.
+
+Analizar:
+
+- Luminarias.
+- Vigas.
+- Forjados.
+- Muros.
+- Otras instalaciones.
+- Elementos próximos del falso techo.
+
+Realizar filtrado espacial previo
+para evitar comprobaciones innecesarias.
+
+Comprobar también, cuando existan
+datos suficientes, la zona superior
+necesaria para conectar el conducto.
+
+No inventar dimensiones de accesorios.
+
+Si faltan datos de la familia,
+registrar la comprobación como provisional.
+
+No crear huecos.
+
+No modificar geometría arquitectónica.
+
+No modificar estructura.
+
+
+==================================================
+19. ASIGNACIÓN DE FLOW
+==================================================
+
+Implementar:
+
+assign_terminal_flow()
+
+El parámetro de destino es:
+
+"Flow"
+
+Parámetro de instancia existente
+en la familia de rejillas.
+
+Cada terminal debe recibir
+su caudal individual calculado.
+
+Ejemplo:
+
+Dormitorio principal:
+
+Caudal de diseño: 10 L/s.
+
+Una rejilla:
+
+Flow = 10 L/s.
+
+
+Salón:
+
+Caudal de diseño: 20 L/s.
+
+Dos rejillas:
+
+Rejilla A:
+Flow = 10 L/s.
+
+Rejilla B:
+Flow = 10 L/s.
+
+Comprobar:
+
+- Existencia del parámetro.
+- Tipo de almacenamiento Double.
+- Tipo de dato Air Flow.
+- IsReadOnly = False.
+- Compatibilidad de unidades.
+
+Utilizar UnitUtils para convertir
+los valores a unidades internas.
+
+No escribir directamente números en L/s
+mediante Parameter.Set(Double) sin conversión.
+
+Comprobar mediante lectura posterior
+que el valor ha quedado almacenado.
+
+No modificar el caudal del tipo.
+
+No utilizar:
+
+"Flujo mín."
+"Flujo máx."
+
+Estos son parámetros de tipo
+y no corresponden al caudal
+individual de cada terminal.
+
+La herramienta debe informar
+de que Flow todavía no está
+asociado al conector MEP.
+
+No intentar modificar automáticamente
+la definición familiar para resolverlo.
+
+
+==================================================
+20. INSERCIÓN DE INSTANCIAS
+==================================================
+
+Implementar:
+
+create_ventilation_terminals()
+
+Para cada terminal:
+
+1. Obtener la habitación asociada.
+2. Obtener el falso techo seleccionado.
+3. Obtener la posición XY optimizada.
+4. Obtener la cota inferior del techo.
+5. Obtener el nivel de referencia.
+6. Calcular el desfase.
+7. Seleccionar FamilySymbol.
+8. Insertar instancia.
+9. Verificar ubicación y nivel.
+10. Asignar Flow.
+11. Regenerar cuando sea necesario.
+12. Verificar el resultado.
+
+Utilizar el método NewFamilyInstance
+compatible con el tipo real de familia.
+
+No utilizar sobrecargas incompatibles
+con FamilyPlacementType.
+
+No introducir coordenadas verticales
+calculadas mediante valores fijos.
+
+No utilizar el nivel activo de la vista
+si es diferente del nivel correspondiente.
+
+No alojar las rejillas en elementos
+que no correspondan.
+
+Verificar posteriormente:
+
+- Tipo correcto.
+- Posición XY.
+- Cota Z.
+- Nivel.
+- Desfase.
+- Flow.
+- Habitación asociada.
+
+La tolerancia geométrica de colocación
+debe ser configurable.
+
+Utilizar inicialmente:
+
+1 mm.
+
+Si la API de la familia impide conseguir
+la posición exacta solicitada:
+
+No simular éxito.
+
+Registrar el error y explicar
+la incompatibilidad.
+
+
+==================================================
+21. ASOCIACIÓN A HABITACIONES
+==================================================
+
+Cada terminal debe quedar asociado
+a la habitación que sirve.
+
+Utilizar identificadores persistentes
+y metadatos de ARQ-T.
+
+Guardar al menos:
+
+- Document identity.
+- Room UniqueId.
+- Tipo de ventilación.
+- Caudal de diseño.
+- Estado de aprobación.
+- Identificador de ejecución.
+
+Priorizar parámetros compartidos
+cuando la información deba ser visible
+en tablas de planificación.
+
+Utilizar Extensible Storage para
+metadatos internos cuando corresponda.
+
+No crear parámetros duplicados.
+
+No sobrescribir parámetros
+corporativos existentes incompatibles.
+
+
+==================================================
+22. CONTROL DE DUPLICADOS
+==================================================
+
+La herramienta debe ser idempotente.
+
+Si se ejecuta dos veces:
+
+No debe duplicar las rejillas.
+
+Antes de crear:
+
+Consultar terminales existentes.
+
+Identificar:
+
+- Terminales propios.
+- Terminales ajenos.
+- Terminales bloqueados.
+- Terminales modificados manualmente.
+
+Si ya existe un terminal válido
+para la estancia:
+
+Evaluar su reutilización.
+
+No eliminar elementos ajenos
+a la herramienta.
+
+No desplazar elementos bloqueados.
+
+No modificar automáticamente
+rejillas manuales sin autorización.
+
+Permitir:
+
+- Mantener.
+- Actualizar.
+- Reubicar.
+- Crear.
+- Eliminar elementos propios obsoletos.
+
+Mostrar las modificaciones previstas
+antes de aplicarlas.
+
+
+==================================================
+23. INTERFAZ PYREVIT
+==================================================
+
+Crear botón:
+
+"Distribuir ventilación"
+
+Panel:
+
+MEP.
+
+Pestaña:
+
+ARQ-T existente.
+
+La interfaz debe permitir:
+
+1. Seleccionar la vivienda.
+
+2. Seleccionar el ámbito
+   de colocación.
+
+3. Analizar habitaciones.
+
+4. Calcular caudales.
+
+5. Mostrar resultados.
+
+6. Optimizar ubicaciones.
+
+7. Previsualizar las rejillas.
+
+8. Aceptar o modificar propuestas.
+
+9. Colocar terminales.
+
+10. Validar elementos creados.
+
+Mostrar una tabla con:
+
+- Planta.
+- Habitación.
+- Uso.
+- Caudal mínimo.
+- Caudal de diseño.
+- Tipo de rejilla.
+- Número de rejillas.
+- Flow por rejilla.
+- Cota de falso techo.
+- Estado.
+
+Mostrar además:
+
+CAUDAL TOTAL DE IMPULSIÓN.
+
+CAUDAL TOTAL DE EXTRACCIÓN.
+
+DIFERENCIA.
+
+NÚMERO DE REJILLAS DE IMPULSIÓN.
+
+NÚMERO DE REJILLAS DE EXTRACCIÓN.
+
+INCIDENCIAS.
+
+
+CONFIGURACIÓN EDITABLE:
+
+- Resolución de búsqueda.
+- Separaciones geométricas.
+- Preferencias de posicionamiento.
+- Número de rejillas por estancia.
+- Caudales de diseño superiores
+  a los mínimos normativos.
+- Pesos de optimización.
+
+Guardar configuración persistente.
+
+No crear elementos únicamente
+por abrir la interfaz.
+
+
+==================================================
+24. PREVISUALIZACIÓN
+==================================================
+
+Antes de colocar terminales,
+mostrar las posiciones propuestas.
+
+Distinguir visualmente:
+
+IMPULSIÓN.
+
+EXTRACCIÓN.
+
+Mostrar los caudales individuales.
+
+La previsualización debe permitir:
+
+- Aceptar.
+- Rechazar.
+- Elegir una alternativa.
+- Mantener una ubicación existente.
+- Bloquear un elemento.
+
+No dejar elementos temporales
+residuales al cancelar.
+
+No crear las familias definitivas
+hasta recibir aceptación.
+
+
+==================================================
+25. INTEGRACIÓN CON MCP
+==================================================
+
+Inspeccionar primero la implementación
+del MCP existente.
+
+No crear otro servidor si puede
+ampliarse el actual.
+
+El motor de cálculo debe ser
+compartido entre MCP y pyRevit.
+
+Exponer, según las convenciones
+de integración existentes,
+operaciones equivalentes a:
+
+analyze_ventilation_rooms()
+
+calculate_ventilation_flows()
+
+propose_ventilation_terminals()
+
+get_ventilation_proposal()
+
+place_ventilation_terminals()
+
+update_ventilation_terminals()
+
+validate_ventilation_terminals()
+
+Las herramientas de lectura
+no deben modificar Revit.
+
+Las herramientas de propuesta
+no deben modificar Revit.
+
+Las herramientas de escritura
+deben requerir una invocación explícita.
+
+Codex debe poder solicitar:
+
+- Análisis completo.
+- Caudales.
+- Posiciones candidatas.
+- Puntuaciones.
+- Alternativas.
+- Geometría relevante.
+- Advertencias.
+- Resultado de colocación.
+
+Las operaciones MCP deben devolver
+datos estructurados y serializables.
+
+Utilizar JSON cuando corresponda.
+
+
+==================================================
+26. EVALUACIÓN MEDIANTE CODEX
+==================================================
+
+Codex debe poder actuar como
+revisor del diseño preliminar.
+
+Procedimiento:
+
+1. Consultar todas las habitaciones.
+
+2. Verificar clasificación.
+
+3. Calcular caudales.
+
+4. Comprobar equilibrio.
+
+5. Analizar conexiones entre habitaciones.
+
+6. Obtener candidatos de ubicación.
+
+7. Evaluar su distribución espacial.
+
+8. Comparar alternativas.
+
+9. Seleccionar opciones válidas.
+
+10. Presentar la propuesta.
+
+11. Ejecutar colocación tras autorización.
+
+12. Validar el resultado.
+
+La lógica geométrica debe
+ser determinista.
+
+Codex puede seleccionar entre
+alternativas técnicamente válidas.
+
+No debe inventar coordenadas
+ni seleccionar posiciones inválidas.
+
+No debe sustituir las comprobaciones
+geométricas por una evaluación visual.
+
+
+==================================================
+27. REQUISITOS DE REVIT API
+==================================================
+
+Todas las operaciones sobre el documento
+deben ejecutarse en un contexto válido
+de Revit API.
+
+Si el MCP opera desde un proceso externo,
+utilizar el mecanismo de despacho existente
+o ExternalEvent cuando corresponda.
+
+No acceder al documento de Revit
+desde hilos externos arbitrarios.
+
+No ejecutar transacciones de Revit
+en procesos independientes.
+
+Separar:
+
+READ
+
+CALCULATE
+
+PREVIEW
+
+WRITE
+
+VALIDATE
+
+Evitar transacciones abiertas
+durante cálculos geométricos prolongados.
+
+Utilizar Transaction y TransactionGroup
+cuando corresponda.
+
+Permitir cancelar la operación.
+
+Gestionar correctamente los fallos
+de creación y actualización.
+
+
+==================================================
+28. ESTRUCTURA MODULAR
+==================================================
+
+Separar la solución en módulos
+con responsabilidades claras.
+
+Estructura orientativa:
+
+ARQT_MEP/
+
+    core/
+        geometry.py
+        spatial_analysis.py
+
+    ventilation/
+        room_classification.py
+        airflow_cte.py
+        flow_balancing.py
+        terminal_distribution.py
+        terminal_optimization.py
+
+    revit/
+        read_rooms.py
+        read_ceilings.py
+        read_doors.py
+        create_terminals.py
+        assign_flow.py
+        validation.py
+
+    integration/
+        ventilation_service.py
+        mcp_adapter.py
+
+    config/
+        ventilation.json
+
+Adaptar las rutas a la estructura
+real del repositorio.
+
+No crear duplicidades.
+
+No programar dos motores distintos
+para pyRevit y MCP.
+
+Los cálculos geométricos y normativos
+deben poder probarse sin abrir Revit.
+
+
+==================================================
+29. PRUEBAS
+==================================================
+
+Implementar pruebas unitarias
+y de integración cuando sea posible.
+
+CASOS OBLIGATORIOS:
+
+1. Vivienda de un dormitorio.
+2. Vivienda de dos dormitorios.
+3. Vivienda de tres dormitorios.
+4. Vivienda de cuatro dormitorios.
+5. Varios baños.
+6. Varios niveles.
+7. Falsos techos a alturas diferentes.
+8. Habitación irregular.
+9. Habitación en L.
+10. Salón-comedor.
+11. Cocina abierta a salón.
+12. Habitación sin falso techo.
+13. Dos falsos techos en una habitación.
+14. Varias rejillas en una estancia.
+15. Asignación de Flow.
+16. Conversión correcta L/s a unidades internas.
+17. Comprobación de nivel y desfase.
+18. Reejecución sin duplicados.
+19. Elementos bloqueados.
+20. Cancelación sin cambios residuales.
+
+COMPROBACIONES:
+
+SUMA IMPULSIÓN = SUMA EXTRACCIÓN.
+
+Cada estancia mantiene su caudal mínimo.
+
+SUMA Flow de rejillas =
+Caudal de diseño de la estancia.
+
+Cada rejilla queda en la cota
+correcta de falso techo.
+
+Cada rejilla utiliza el tipo correcto.
+
+No se generan duplicados.
+
+No se alteran elementos ajenos.
+
+Si las pruebas de integración requieren
+Revit abierto y no es posible ejecutarlas,
+indicarlo expresamente.
+
+
+==================================================
+30. CRITERIOS DE ACEPTACIÓN
+==================================================
+
+La herramienta estará terminada cuando:
+
+- Aparezca en el panel MEP.
+- Analice habitaciones por nombre.
+- Calcule los caudales DB-HS 3.
+- Equilibre impulsión y extracción.
+- Identifique los falsos techos.
+- Optimice ubicaciones.
+- Permita revisar propuestas.
+- Coloque las rejillas correspondientes.
+- Utilice los niveles adecuados.
+- Calcule correctamente sus desfases.
+- Asigne Flow individualmente.
+- No genere duplicados.
+- Permita ejecución mediante MCP.
+- Valide los resultados.
+- Devuelva incidencias comprensibles.
+
+No presentar como superada una comprobación
+que no haya sido ejecutada realmente.
+
+
+==================================================
+31. ORDEN DE DESARROLLO
+==================================================
+
+1. Inspeccionar el repositorio.
+
+2. Identificar la extensión pyRevit.
+
+3. Inspeccionar MCP.
+
+4. Verificar el tipo real de alojamiento
+   de las familias existentes.
+
+5. Implementar análisis de habitaciones.
+
+6. Implementar clasificación.
+
+7. Implementar cálculo de caudales.
+
+8. Implementar equilibrado.
+
+9. Implementar identificación de falsos techos.
+
+10. Implementar análisis geométrico.
+
+11. Implementar optimización.
+
+12. Implementar colocación.
+
+13. Implementar asignación de Flow.
+
+14. Implementar control de duplicados.
+
+15. Implementar interfaz pyRevit.
+
+16. Integrar MCP.
+
+17. Ejecutar pruebas.
+
+18. Corregir incidencias.
+
+19. Documentar utilización.
+
+
+==================================================
+32. ENTREGA
+==================================================
+
+Al finalizar proporciona:
+
+- Archivos creados.
+- Archivos modificados.
+- Ubicación del botón.
+- Funciones disponibles.
+- Operaciones MCP integradas.
+- Configuración utilizada.
+- Resultado de las pruebas.
+- Limitaciones conocidas.
+- Instrucciones de uso.
+
+Debes entregar código funcional,
+no únicamente una descripción.
+
+PRIORIDADES:
+
+1. Cálculo correcto de caudales.
+
+2. Ubicación arquitectónicamente razonable.
+
+3. Colocación exacta respecto
+   al nivel y falso techo.
+
+4. Asignación correcta de Flow.
+
+5. Estabilidad de Revit.
+
+6. Funcionamiento desde pyRevit y MCP.
+
+7. Arquitectura reutilizable
+   para futuras automatizaciones MEP.

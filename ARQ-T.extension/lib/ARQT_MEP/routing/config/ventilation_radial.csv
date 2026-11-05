@@ -1,0 +1,23 @@
+key;value_json
+version;1
+system_id;"""ventilation_radial"""
+routing_strategy;"""RADIAL"""
+section;"{""shape"": ""CIRCULAR"", ""nominal_diameter_mm"": 125, ""outer_diameter_mm"": 125, ""insulation_mm"": 0}"
+clearance_mm;15
+bend_radius_mm;125
+bend_geometry_provisional;true
+connection_straight_mm;150
+search;"{""coarse_resolution_mm"": 50, ""fine_resolution_mm"": 25, ""local_refinement_mm"": 10, ""rescue_resolution_mm"": 5, ""rescue_extent_mm"": 500, ""rescue_seconds"": 2, ""max_nodes"": 100000, ""max_seconds"": 20, ""max_total_seconds"": 120, ""max_iterations"": 3, ""max_alternatives"": 3}"
+weights;"{""length"": 1.0, ""bend"": 0.4, ""proximity"": 0.15, ""nonpreferred"": 0.1, ""crossing"": 3.0, ""conditional"": 20.0}"
+use_distributors;true
+include_links;false
+phase_id;null
+element_rules;{}
+route_overrides;{}
+constraints;"{""allowed_regions"": [], ""forbidden_regions"": [], ""preferred_regions"": [], ""passages"": [], ""rejected_passages"": [], ""approved_passages"": [], ""passage_approvals"": {}, ""evaluable_elements"": [], ""waypoints"": {}, ""locked_routes"": []}"
+structural_crossings;"""PROPOSAL_ONLY"""
+native_validation;true
+model_identification;"{""construction"": [{""contains"": ""Paquete techo"", ""meaning"": ""FALSE_CEILING""}, {""contains"": ""MU-Hormigon"", ""meaning"": ""STRUCTURE""}, {""contains"": ""Trasdosado"", ""meaning"": ""PASSABLE""}, {""contains"": ""Tabique"", ""meaning"": ""PASSABLE""}]}"
+flexible_duct;"{""type_name"": ""Flex - Redondo"", ""category"": ""OST_FlexDuctCurves"", ""instance_parameter"": ""Diámetro"", ""available_diameters_mm"": [75, 93, 125], ""selection"": ""FLOW_AND_ROUTE_CONDITIONS"", ""parallel_branches"": true, ""commercial_system"": ""FRÄNKISCHE profi-air classic"", ""commercial_size_mapping"": {}, ""require_verified_product_and_accessory_compatibility"": true}"
+distributors;"{""name_contains"": ""Distribuidor"", ""branch_capacities"": [5, 10], ""placement"": ""HRV_FALSE_CEILING_SPACE"", ""separate_networks"": true}"
+main_connection;"{""kind"": ""FLEXIBLE_CIRCULAR"", ""diameter_mm"": 125, ""automatic_diameter_change"": false}"

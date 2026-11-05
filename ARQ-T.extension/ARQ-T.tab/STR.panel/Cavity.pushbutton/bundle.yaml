@@ -1,0 +1,9 @@
+title: Automatización CAVITY
+tooltip: |
+  Distribuye piezas IGLU completas sobre un suelo horizontal.
+
+  Selecciona el suelo y el tipo IGLU para calcular filas, columnas y márgenes en ambos ejes. Coloca las piezas desde la cara inferior, con separación y desfase configurables, respetando el perímetro y los huecos. Permite sustituir una matriz anterior sin modificar la geometría del suelo.
+author: ARQ-T
+context: doc-project
+engine:
+  clean: true
