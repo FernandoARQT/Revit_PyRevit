@@ -19,6 +19,11 @@ from .connector_labels import connection_info,validate_origin
 from .origin_groups import bind_origin_groups
 
 
+def project_identity(doc):
+    from ..ownership import document_id
+    return document_id(doc)
+
+
 def _json(value):return json.dumps(value,ensure_ascii=False,indent=2)
 
 
@@ -39,7 +44,7 @@ def _pump():
 
 
 def _window(doc,state,on_loaded=None):
-    path=os.path.abspath(os.path.join(os.path.dirname(__file__),'..','..','..','ARQ-T.tab','MEP.panel','TrazadoAutomaticoMEP.pushbutton','window.xaml'))
+    path=os.path.abspath(os.path.join(os.path.dirname(__file__),'..','..','..','ARQ-T.tab','MEP.panel','TrazadoAutomaticoMEP.pushbutton','legacy_window.xaml'))
     with open(path,encoding='utf8') as f:window=XamlReader.Parse(f.read())
     names=('DocumentLabel HRV Tabs Refresh OriginsNone Origins OriginRole PreviousConnections Destinations DestRole DestAll DestNone '
            'Diameter Insulation Clearance BendRadius Resolution UseDistributors IncludeLinks Configuration SaveSettings '
@@ -381,19 +386,39 @@ def _window(doc,state,on_loaded=None):
         if state.get('busy') and state.get('action') is None:
             state['cancelled']=True;args.Cancel=True
     window.Closing+=closing
+    from .design.editor import DesignEditor
+    from .design import store as design_store
+    from System import TimeSpan
+    from System.Windows.Threading import DispatcherTimer
+    def design_inputs():
+        configuration=inputs()
+        return {'configuration':configuration,'destinations':copy.deepcopy(state['destinations'])}
+    design_editor=DesignEditor(window,state['document_id'],lambda:None,None,execute,doc,
+        create_payload=design_inputs,get_configuration=inputs)
+    state['design_editor']=design_editor
+    if state.get('design_proposal_id'):
+        try:design_editor.adopt(design_store.get(state['document_id'],state['design_proposal_id']))
+        except (ValueError,OSError) as exc:design_editor.info(str(exc))
+    timer=DispatcherTimer();timer.Interval=TimeSpan.FromMilliseconds(800)
+    timer.Tick+=lambda *args:design_editor.poll()
+    def design_closed(*args):
+        timer.Stop()
+        if design_editor.proposal:state['design_proposal_id']=design_editor.proposal.proposal_id
+    window.Closed+=design_closed;timer.Start()
     if on_loaded:window.Loaded+=lambda sender,args:on_loaded(window,ui,state)
     window.ShowDialog()
     state['tab']=ui['Tabs'].SelectedIndex
     return state
 
 
-def show(doc,uidoc,_on_loaded=None):
+def show_legacy(doc,uidoc,_on_loaded=None):
     if doc is None or doc.IsFamilyDocument:raise ValueError('Abra un proyecto Revit.')
     s=settings.load()
     saved=mcp.dispatch(doc,'get_heat_recovery_equipment_assignments')
     if saved:s=settings.merge(s,saved)
     catalog=mcp.dispatch(doc,'get_mep_connection_points',{'configuration':s})
-    state={'configuration':s,'catalog':catalog,'proposal':None,'snapshot':None,'origin_table':None,'destination_table':None}
+    state={'configuration':s,'catalog':catalog,'proposal':None,'snapshot':None,'origin_table':None,'destination_table':None,
+           'document_id':project_identity(doc)}
     preview_ids=[]
     try:
         while True:
@@ -429,3 +454,8 @@ def show(doc,uidoc,_on_loaded=None):
     finally:
         if preview_ids:mcp.dispatch(doc,'hide_mep_routes',{'proposal_id':state['proposal']['proposal_id'],'explicit':True},allow_write=True)
     return state
+
+
+def show(doc,uidoc,_on_loaded=None):
+    from .design.workspace import show as show_workspace
+    return show_workspace(doc,uidoc,_on_loaded)

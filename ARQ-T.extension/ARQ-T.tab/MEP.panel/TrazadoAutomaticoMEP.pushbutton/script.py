@@ -1,5 +1,5 @@
 #! python3
-"""System selection followed by the heat recovery designer."""
+"""Open the ventilation plan designer directly."""
 from pyrevit import revit
 try:
     # CPython may retain modules between executions. Reload the complete routing
@@ -18,8 +18,7 @@ try:
             delattr(parent,attribute)
     importlib.invalidate_caches()
     from ARQT_MEP.routing.gui import show
-    from ARQT_MEP.routing.system_menu import select_system
-    if select_system()=='ventilation_radial':show(revit.doc,revit.uidoc)
+    show(revit.doc,revit.uidoc)
 except Exception as exc:
     import traceback
     import clr

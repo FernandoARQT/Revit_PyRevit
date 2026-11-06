@@ -21,6 +21,7 @@ def main():
     parser.add_argument('--merge',action='append',default=[])
     parser.add_argument('--seed',type=int,default=0)
     parser.add_argument('--snapshot',default='tests/artifacts/routing-current-snapshot.json')
+    parser.add_argument('--capture',help='Atomic snapshot/catalog/configuration capture; overrides historical mixed files')
     parser.add_argument('--iterations',type=int,default=3)
     parser.add_argument('--rrt-only',action='store_true')
     for option in ('topology','iris','lazy','coordination','rrt'):parser.add_argument('--no-'+option,action='store_true')
@@ -30,6 +31,9 @@ def main():
     snapshot_path=ROOT/args.snapshot
     snapshot=json.loads(snapshot_path.read_text(encoding='utf8'))
     catalog=json.loads((folder/'routing-current-catalog.json').read_text(encoding='utf8'))
+    if args.capture:
+        captured=json.loads((ROOT/args.capture).read_text(encoding='utf8'))
+        source=captured;snapshot=captured['snapshot'];catalog=captured['catalog']
     config=settings.validate(source['configuration']);config['random_seed']=args.seed
     config['search']['max_total_seconds']=args.seconds
     config['search'].update(max_iterations=args.iterations,max_seconds=20)
@@ -53,7 +57,10 @@ def main():
     started=time.monotonic()
     result=service.create_mep_route_proposal(snapshot,catalog,source['origins'],source['destinations'],config,existing)
     report={'budget_seconds':args.seconds,'iterations_limit':args.iterations,'wall_seconds':time.monotonic()-started,
-        'snapshot_file':args.snapshot,'snapshot_sha256':hashlib.sha256(snapshot_path.read_bytes()).hexdigest(),
+        'snapshot_file':args.capture or args.snapshot,'snapshot_sha256':hashlib.sha256(
+            json.dumps(snapshot,sort_keys=True,separators=(',',':')).encode() if args.capture else snapshot_path.read_bytes()).hexdigest(),
+        'catalog_sha256':hashlib.sha256(json.dumps(catalog,sort_keys=True,separators=(',',':')).encode()).hexdigest(),
+        'input_capture':args.capture,
         'engine_code_sha256':hashlib.sha256(b''.join(str(p.relative_to(ROOT)).encode()+p.read_bytes()
             for p in sorted((ROOT/'ARQ-T.extension/lib/ARQT_MEP/routing').rglob('*.py')))).hexdigest(),
         'python_version':platform.python_version(),'logical_processors':os.cpu_count(),

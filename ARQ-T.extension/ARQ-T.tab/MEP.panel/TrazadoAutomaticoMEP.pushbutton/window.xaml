@@ -1,105 +1,97 @@
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="ARQ-T | Trazado automático MEP" Width="1320" Height="900" MinWidth="1100" MinHeight="720" WindowStartupLocation="CenterScreen" Background="#F5F6F8" Foreground="#25272B" FontFamily="Century Gothic" FontSize="12">
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="ARQ-T | Trazado automático MEP" Width="1460" Height="920" MinWidth="1120" MinHeight="700" WindowStartupLocation="CenterScreen" Background="#F5F6F8" Foreground="#25272B" FontFamily="Century Gothic" FontSize="12">
  <Window.Resources>
-  <Style TargetType="Button"><Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#E2E4E8"/><Setter Property="Padding" Value="10,7"/><Setter Property="Margin" Value="0,0,7,7"/><Setter Property="Cursor" Value="Hand"/></Style>
-  <Style TargetType="TextBox"><Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#E2E4E8"/><Setter Property="Padding" Value="5,4"/><Setter Property="Margin" Value="0,2,10,8"/></Style>
-  <Style TargetType="ComboBox"><Setter Property="MinHeight" Value="28"/><Setter Property="Margin" Value="0,2,10,8"/></Style>
-  <Style TargetType="DataGrid"><Setter Property="Background" Value="White"/><Setter Property="AlternatingRowBackground" Value="#F5F6F8"/><Setter Property="BorderBrush" Value="#E2E4E8"/><Setter Property="HorizontalGridLinesBrush" Value="#E2E4E8"/><Setter Property="AutoGenerateColumns" Value="False"/><Setter Property="MinColumnWidth" Value="85"/><Setter Property="ColumnWidth" Value="120"/><Setter Property="CanUserAddRows" Value="False"/><Setter Property="CanUserDeleteRows" Value="False"/><Setter Property="SelectionMode" Value="Single"/></Style>
-  <Style TargetType="DataGridColumnHeader"><Setter Property="Background" Value="#25272B"/><Setter Property="Foreground" Value="White"/><Setter Property="Padding" Value="8,6"/></Style>
+  <Style TargetType="Button"><Setter Property="Padding" Value="12,8"/><Setter Property="Margin" Value="0,0,6,0"/><Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#DCE0E6"/><Setter Property="Cursor" Value="Hand"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
+  <Style TargetType="ComboBox"><Setter Property="MinHeight" Value="30"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
+  <Style TargetType="TextBox"><Setter Property="Padding" Value="6,5"/><Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#DCE0E6"/></Style>
+  <Style TargetType="DataGrid"><Setter Property="AutoGenerateColumns" Value="False"/><Setter Property="CanUserAddRows" Value="False"/><Setter Property="CanUserDeleteRows" Value="False"/><Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#E2E4E8"/><Setter Property="HeadersVisibility" Value="Column"/><Setter Property="RowHeaderWidth" Value="0"/><Setter Property="RowHeight" Value="30"/><Setter Property="SelectionMode" Value="Single"/><Setter Property="HorizontalGridLinesBrush" Value="#EEF0F3"/></Style>
  </Window.Resources>
- <Grid Margin="22">
-  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/><RowDefinition Height="95"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-  <StackPanel><TextBlock Text="Trazado automático MEP" FontSize="26" FontWeight="Bold"/><TextBlock Name="DocumentLabel" Foreground="#666666" Margin="0,4,0,12"/></StackPanel>
-  <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
-   <StackPanel><TextBlock Text="Sistema disponible"/><ComboBox SelectedIndex="0"><ComboBoxItem Content="Ventilación radial · recuperador de calor"/></ComboBox></StackPanel>
-   <StackPanel Grid.Column="1"><TextBlock Text="Recuperador de referencia · selección explícita"/><ComboBox Name="HRV"/></StackPanel>
+ <Grid Margin="18">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <DockPanel Margin="0,0,0,16">
+   <StackPanel DockPanel.Dock="Left"><TextBlock Text="Trazado automático MEP" FontSize="25" FontWeight="Bold"/><TextBlock Name="DocumentLabel" Foreground="#707782" Margin="0,4,0,0" Text="Ventilación radial · estudio de corredores en planta"/></StackPanel>
+   <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+    <ComboBox Name="Studies" Width="240" Margin="0,0,8,0" ToolTip="Estudios guardados en este proyecto"/>
+    <Menu Background="Transparent" Padding="6"><MenuItem Header="Estudios"><MenuItem Name="NewStudy" Header="Nuevo estudio"/><MenuItem Name="DuplicateStudy" Header="Duplicar estudio actual"/><MenuItem Name="RecoverStudies" Header="Actualizar lista de guardados"/><Separator/><MenuItem Name="ExportPlan" Header="Guardar imagen de la planta"/></MenuItem></Menu>
+   </StackPanel>
+  </DockPanel>
+  <Grid Grid.Row="1" Name="DesignTab">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="290"/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>
+   <Border Background="White" BorderBrush="#E2E4E8" BorderThickness="1" CornerRadius="5" Padding="14">
+    <DockPanel>
+     <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+      <Button Name="Generate" Content="Generar corredores" Background="#F47721" BorderBrush="#F47721" Foreground="White" FontWeight="Bold" HorizontalContentAlignment="Center" Margin="0" Padding="12,11"/>
+      <Button Name="CancelGeneration" Content="Cancelar cálculo" Margin="0,7,0,0" Visibility="Collapsed"/>
+      <TextBlock Text="Analiza el edificio y genera ejes de estudio. El RVT se conserva." TextWrapping="Wrap" Foreground="#707782" FontSize="10.5" Margin="0,8,0,0"/>
+     </StackPanel>
+     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel>
+       <DockPanel Margin="0,0,0,10"><TextBlock Text="Preparación" FontSize="16" FontWeight="Bold"/><Button Name="RefreshEquipment" Content="Actualizar" DockPanel.Dock="Right" HorizontalAlignment="Right" Padding="7,4" Margin="0"/></DockPanel>
+       <TextBlock Text="Recuperador" Foreground="#707782" Margin="0,3,0,4"/><ComboBox Name="HeatRecovery"/>
+       <TextBlock Text="Distribuidor de impulsión" Foreground="#707782" Margin="0,11,0,4"/><ComboBox Name="SupplyManifold"/>
+       <TextBlock Text="Distribuidor de extracción" Foreground="#707782" Margin="0,11,0,4"/><ComboBox Name="ExtractManifold"/>
+       <TextBlock Name="EquipmentInfo" Foreground="#707782" TextWrapping="Wrap" FontSize="10.5" Margin="0,7,0,12"/>
+       <Expander Header="Destinos del estudio" IsExpanded="True" Margin="0,4,0,12"><StackPanel Margin="0,8,0,0">
+        <DataGrid Name="Terminals" Height="205" FontSize="10.5" CanUserSortColumns="False"><DataGrid.Columns>
+         <DataGridCheckBoxColumn Header="Usar" Binding="{Binding Include,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}" Width="42"/>
+         <DataGridTextColumn Header="Destino" Binding="{Binding Label}" IsReadOnly="True" Width="*"/>
+         <DataGridTextColumn Header="L/s" Binding="{Binding Flow}" IsReadOnly="True" Width="48"/>
+        </DataGrid.Columns></DataGrid>
+        <TextBlock Name="TerminalInfo" TextWrapping="Wrap" Foreground="#707782" FontSize="10.5" Margin="0,6,0,0"/>
+       </StackPanel></Expander>
+       <Expander Header="Parámetros del estudio"><StackPanel Margin="0,10,0,0">
+        <TextBlock Text="Envolvente geométrica del proyecto" FontWeight="Bold" TextWrapping="Wrap"/>
+        <TextBlock Text="Valores cargados de la configuración actual; ajuste el exterior real del producto si procede." Foreground="#707782" TextWrapping="Wrap" FontSize="10.5" Margin="0,5,0,8"/>
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+         <TextBlock Text="Ø exterior · mm" Margin="0,0,8,4"/><TextBlock Grid.Column="1" Text="Radio de giro · mm" Margin="0,0,0,4"/>
+         <TextBox Name="OuterDiameter" Grid.Row="1" Margin="0,0,8,10"/><TextBox Name="BendRadius" Grid.Row="1" Grid.Column="1" Margin="0,0,0,10"/>
+         <TextBlock Text="Aislamiento · mm" Grid.Row="2" Margin="0,0,8,4"/><TextBlock Text="Holgura · mm" Grid.Row="2" Grid.Column="1" Margin="0,0,0,4"/>
+         <TextBox Name="Insulation" Grid.Row="3" Margin="0,0,8,10"/><TextBox Name="Clearance" Grid.Row="3" Grid.Column="1" Margin="0,0,0,10"/>
+        </Grid>
+        <TextBlock Text="Tiempo de cálculo externo" Margin="0,2,0,4"/><ComboBox Name="Budget"><ComboBoxItem Content="Rápido · 30 s"/><ComboBoxItem Content="Normal · 120 s"/><ComboBoxItem Content="Ampliado · 240 s"/><ComboBoxItem Content="Profundo · 600 s"/><ComboBoxItem Content="Extendido · 1000 s"/></ComboBox>
+        <CheckBox Name="IncludeLinks" Content="Incluir modelos vinculados" Margin="0,10,0,0"/>
+       </StackPanel></Expander>
+       <Expander Header="Corredores del estudio" IsExpanded="False" Margin="0,14,0,0"><ListBox Name="Corridors" Height="150" Margin="0,8,0,0"/></Expander>
+      </StackPanel>
+     </ScrollViewer>
+    </DockPanel>
+   </Border>
+   <Grid Grid.Column="2"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <DockPanel Margin="0,0,0,10">
+     <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"><TextBlock Text="Planta" VerticalAlignment="Center" Margin="0,0,8,0"/><ComboBox Name="Level" Width="170" Margin="0,0,9,0"/><Button Name="FitPlan" Content="Ajustar"/></StackPanel>
+     <WrapPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
+      <ComboBox Name="ManualNetwork" Width="112" SelectedIndex="2" Margin="0,0,6,0"><ComboBoxItem Content="Impulsión"/><ComboBoxItem Content="Extracción"/><ComboBoxItem Content="Compartido"/></ComboBox>
+      <Button Name="DrawCorridor" Content="Dibujar corredor"/><Button Name="FinishDrawing" Content="Terminar" Visibility="Collapsed"/><Button Name="CancelDrawing" Content="Cancelar" Visibility="Collapsed"/>
+      <Button Name="Undo" Content="↶" ToolTip="Deshacer · Ctrl+Z"/><Button Name="Redo" Content="↷" ToolTip="Rehacer · Ctrl+Y"/>
+     </WrapPanel>
+    </DockPanel>
+    <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <Border Background="White" BorderBrush="#E2E4E8" BorderThickness="1" CornerRadius="5">
+      <Grid><Canvas Name="Plan" ClipToBounds="True" Focusable="True"/>
+       <StackPanel Name="EmptyPlan" HorizontalAlignment="Center" VerticalAlignment="Center" Width="370" IsHitTestVisible="False"><TextBlock Text="El estudio empieza aquí" FontSize="21" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Text="Revise los equipos y pulse Generar corredores. La planta y sus corredores aparecerán en este espacio." Foreground="#707782" TextWrapping="Wrap" TextAlignment="Center" Margin="0,10,0,0"/></StackPanel>
+      </Grid>
+     </Border>
+     <Border Name="SelectionPanel" Grid.Column="1" Width="236" Background="White" BorderBrush="#E2E4E8" BorderThickness="1" CornerRadius="5" Padding="12" Margin="10,0,0,0" Visibility="Collapsed">
+      <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
+       <TextBlock Name="SelectionTitle" Text="Corredor seleccionado" FontSize="15" FontWeight="Bold" TextWrapping="Wrap"/>
+       <TextBlock Name="SelectionSummary" TextWrapping="Wrap" Foreground="#707782" Margin="0,6,0,12"/>
+       <TextBlock Text="Uso del corredor" Margin="0,0,0,4"/><ComboBox Name="CorridorNetwork"><ComboBoxItem Content="Impulsión"/><ComboBoxItem Content="Extracción"/><ComboBoxItem Content="Compartido"/></ComboBox>
+       <TextBlock Text="Restricción" Margin="0,10,0,4"/><ComboBox Name="CorridorConstraint"><ComboBoxItem Content="Preferente"/><ComboBoxItem Content="Obligatorio"/><ComboBoxItem Content="Bloqueado"/></ComboBox>
+       <Separator Margin="0,14,0,12"/>
+       <TextBlock Text="Punto de control" Margin="0,0,0,4"/><ComboBox Name="Vertex"/>
+       <TextBlock Text="X · mm" Margin="0,10,0,4"/><TextBox Name="PointX"/><TextBlock Text="Y · mm" Margin="0,8,0,4"/><TextBox Name="PointY"/>
+       <Button Name="MovePoint" Content="Mover punto" Margin="0,10,0,0" HorizontalAlignment="Stretch"/>
+       <Button Name="InsertPoint" Content="Añadir punto en un tramo" Margin="0,7,0,0" HorizontalAlignment="Stretch"/>
+       <Button Name="DeletePoint" Content="Eliminar punto" Margin="0,7,0,0" HorizontalAlignment="Stretch"/>
+       <Button Name="DeleteCorridor" Content="Eliminar corredor" Margin="0,16,0,0" Foreground="#B04737" HorizontalAlignment="Stretch"/>
+      </StackPanel></ScrollViewer>
+     </Border>
+    </Grid>
+    <DockPanel Grid.Row="2" Margin="0,8,0,0"><TextBlock FontSize="10.5"><Run Text="● Impulsión    " Foreground="#F47721"/><Run Text="● Extracción    " Foreground="#287CAB"/><Run Text="● Corredor compartido" Foreground="#8751A1"/></TextBlock><TextBlock DockPanel.Dock="Right" Text="Rueda: zoom · derecho/central: pan · doble clic: añadir punto" Foreground="#707782" FontSize="10.5" HorizontalAlignment="Right"/></DockPanel>
+   </Grid>
   </Grid>
-  <TabControl Name="Tabs" Grid.Row="2">
-   <TabItem Header="1 · Distribuidores"><DockPanel Margin="10">
-    <WrapPanel DockPanel.Dock="Top"><Button Name="Refresh" Content="Actualizar equipos"/><Button Name="OriginsNone" Content="Excluir todos"/><Button Name="PreviousConnections" Content="Conexiones previas…"/></WrapPanel>
-    <TextBlock DockPanel.Dock="Bottom" Text="Seleccione distribuidores completos y asigne SUPPLY (impulsión) o EXTRACT (extracción). El recuperador alimenta sus entradas principales; las derivaciones se asignan automáticamente a los terminales de cada red. Las conexiones existentes se conservan hasta que elija eliminarlas en Conexiones previas." TextWrapping="Wrap" Margin="0,10,0,0"/>
-    <DataGrid Name="Origins"><DataGrid.Columns>
-     <DataGridCheckBoxColumn Header="Usar" Binding="{Binding Include, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="65"/>
-     <DataGridTextColumn Header="Distribuidor / ID" Binding="{Binding Device}" IsReadOnly="True" Width="*"/>
-     <DataGridComboBoxColumn x:Name="OriginRole" Header="Impulsión / extracción" SelectedItemBinding="{Binding Network}" Width="155"/>
-     <DataGridTextColumn Header="Derivaciones" Binding="{Binding Capacity}" IsReadOnly="True" Width="100"/>
-     <DataGridTextColumn Header="Libres" Binding="{Binding Available}" IsReadOnly="True" Width="85"/>
-     <DataGridTextColumn Header="Tomas identificadas" Binding="{Binding Details}" IsReadOnly="True" Width="300"/>
-    </DataGrid.Columns></DataGrid>
-   </DockPanel></TabItem>
-   <TabItem Header="2 · Destinos"><DockPanel Margin="10">
-    <WrapPanel DockPanel.Dock="Top"><Button Name="DestAll" Content="Seleccionar todos los disponibles"/><Button Name="DestNone" Content="Excluir todos"/></WrapPanel>
-    <TextBlock DockPanel.Dock="Bottom" Text="Flow se lee de la instancia y no se modifica. Si un terminal tiene varios conectores, seleccione solo uno. SUPPLY = impulsión; EXTRACT = extracción. Sin conector o Flow verificable, la fila no se acepta para cálculo." TextWrapping="Wrap" Margin="0,10,0,0"/>
-    <DataGrid Name="Destinations"><DataGrid.Columns>
-     <DataGridCheckBoxColumn Header="Incluir" Binding="{Binding Include}"/>
-     <DataGridTextColumn Header="Terminal / ID" Binding="{Binding Device}" IsReadOnly="True" Width="*"/>
-     <DataGridTextColumn Header="Habitación" Binding="{Binding Room}" IsReadOnly="True" Width="130"/>
-     <DataGridComboBoxColumn x:Name="DestRole" Header="Red interior" SelectedItemBinding="{Binding Network}" Width="115"/>
-     <DataGridTextColumn Header="Flow L/s" Binding="{Binding Flow}" IsReadOnly="True"/>
-     <DataGridTextColumn Header="Puerto" Binding="{Binding Port}" IsReadOnly="True"/>
-     <DataGridTextColumn Header="XYZ internas mm" Binding="{Binding XYZ}" IsReadOnly="True" Width="235"/>
-    </DataGrid.Columns></DataGrid>
-   </DockPanel></TabItem>
-   <TabItem Header="3 · Configuración"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="12">
-    <TextBlock Text="Profundidad de cálculo · tiempo máximo"/><ComboBox Name="RoutingMode" Width="240" HorizontalAlignment="Left"/>
-    <WrapPanel>
-     <StackPanel Width="150"><TextBlock Text="Ø nominal / exterior mm"/><TextBox Name="Diameter"/></StackPanel>
-     <StackPanel Width="120"><TextBlock Text="Aislamiento mm"/><TextBox Name="Insulation"/></StackPanel>
-     <StackPanel Width="120"><TextBlock Text="Holgura mm"/><TextBox Name="Clearance"/></StackPanel>
-     <StackPanel Width="140"><TextBlock Text="Radio de giro mm"/><TextBox Name="BendRadius"/></StackPanel>
-     <StackPanel Width="140"><TextBlock Text="Resolución fina mm"/><TextBox Name="Resolution"/></StackPanel>
-    </WrapPanel>
-    <CheckBox Name="UseDistributors" Content="Exigir distribuidores separados de impulsión y extracción" Margin="0,0,0,8"/>
-    <CheckBox Name="IncludeLinks" Content="Incluir sólidos de modelos vinculados y sus transformaciones" Margin="0,0,0,8"/>
-    <TextBlock Text="Configuración avanzada JSON · pesos, límites, fase, reglas de elementos, regiones permitidas/prohibidas/preferentes y pasos. Las dimensiones superiores prevalecen. Los pasos estructurales siguen condicionados hasta validación técnica." TextWrapping="Wrap"/>
-    <TextBox Name="Configuration" AcceptsReturn="True" Height="330" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
-    <Button Name="SaveSettings" Content="Guardar preferencias de usuario" HorizontalAlignment="Left"/>
-   </StackPanel></ScrollViewer></TabItem>
-   <TabItem Header="4 · Referencias manuales"><Grid Margin="12">
-    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
-    <TextBlock Text="Referencias explícitas de diseño, en coordenadas internas de Revit convertidas a mm. No sustituyen conectores verificados. Una salida por ramal. Use puntos medidos del proyecto; no se generan coordenadas automáticamente." TextWrapping="Wrap" Margin="0,0,0,10"/>
-    <TextBlock Grid.Row="1" Text="Orígenes: [{&quot;id&quot;:&quot;distribuidor-S-1&quot;, &quot;xyz_mm&quot;:[x,y,z], &quot;network_type&quot;:&quot;SUPPLY&quot;, &quot;kind&quot;:&quot;DISTRIBUTOR&quot;}]" TextWrapping="Wrap"/>
-    <TextBox Grid.Row="2" Name="ManualOrigins" AcceptsReturn="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto"/>
-    <TextBlock Grid.Row="3" Text="Destinos: [{&quot;id&quot;:&quot;destino-1&quot;, &quot;xyz_mm&quot;:[x,y,z], &quot;network_type&quot;:&quot;SUPPLY&quot;, &quot;airflow_lps&quot;:8}]" TextWrapping="Wrap"/>
-    <TextBox Grid.Row="4" Name="ManualDestinations" AcceptsReturn="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto"/>
-   </Grid></TabItem>
-   <TabItem Header="5 · Rutas y alternativas"><Grid Margin="10">
-    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="130"/></Grid.RowDefinitions>
-    <WrapPanel><Button Name="Alternatives" Content="Comparar alternativas"/><ComboBox Name="Alternative" Width="230"/><Button Name="SelectAlternative" Content="Usar alternativa"/><Button Name="Recalculate" Content="Recalcular selección"/></WrapPanel>
-    <DataGrid Grid.Row="1" Name="Routes"><DataGrid.Columns>
-     <DataGridCheckBoxColumn Header="Bloquear" Binding="{Binding Locked}"/>
-     <DataGridTextColumn Header="Ruta" Binding="{Binding Id}" IsReadOnly="True" Width="*"/>
-     <DataGridTextColumn Header="Red" Binding="{Binding Network}" IsReadOnly="True"/>
-     <DataGridTextColumn Header="L/s" Binding="{Binding Flow}" IsReadOnly="True"/>
-     <DataGridTextColumn Header="Ø mm" Binding="{Binding Diameter}" IsReadOnly="True"/>
-     <DataGridTextColumn Header="m" Binding="{Binding Length}" IsReadOnly="True"/>
-     <DataGridTextColumn Header="Codos" Binding="{Binding Bends}" IsReadOnly="True"/>
-     <DataGridTextColumn Header="Validación" Binding="{Binding Status}" IsReadOnly="True" Width="190"/>
-     <DataGridTextColumn Header="Aprobación" Binding="{Binding Approval}" IsReadOnly="True" Width="120"/>
-    </DataGrid.Columns></DataGrid>
-    <WrapPanel Grid.Row="2" Margin="0,10,0,0">
-     <StackPanel Width="110"><TextBlock Text="Ø selección mm"/><TextBox Name="RouteDiameter"/></StackPanel>
-     <StackPanel Width="110"><TextBlock Text="Holgura mm"/><TextBox Name="RouteClearance"/></StackPanel>
-     <StackPanel Width="300"><TextBlock Text="Waypoints XYZ mm · lista JSON"/><TextBox Name="Waypoints"/></StackPanel>
-     <StackPanel Width="210"><TextBlock Text="Responsable técnico"/><TextBox Name="Responsible"/></StackPanel>
-     <StackPanel Width="210"><TextBlock Text="Referencia de validación de pasos"/><TextBox Name="TechnicalReference"/></StackPanel>
-     <Button Name="Approve" Content="Aprobar ruta" VerticalAlignment="Bottom"/>
-    </WrapPanel>
-    <TextBlock Grid.Row="3" Text="Propiedades y diagnósticos de la ruta seleccionada"/>
-    <TextBox Grid.Row="4" Name="Properties" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" FontFamily="Consolas" FontSize="11" VerticalScrollBarVisibility="Auto"/>
-   </Grid></TabItem>
-   <TabItem Header="6 · Propuestas guardadas"><DockPanel Margin="12">
-    <WrapPanel DockPanel.Dock="Top"><Button Name="ListSaved" Content="Consultar propuestas del proyecto"/><Button Name="LoadSaved" Content="Recuperar seleccionada"/></WrapPanel>
-    <ListBox Name="Saved"/>
-   </DockPanel></TabItem>
-  </TabControl>
-  <TextBlock Grid.Row="3" Name="Summary" Text="Sin análisis. Abrir esta ventana no modifica elementos." FontWeight="Bold" TextWrapping="Wrap" Margin="0,12,0,8"/>
-  <TextBox Grid.Row="4" Name="Issues" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="White"/>
-  <WrapPanel Grid.Row="5" Margin="0,8,0,0">
-   <Button Name="Analyze" Content="Analizar geometría"/><Button Name="Calculate" Content="Calcular recorridos" Background="#F47721" ToolTip="Coloca o reutiliza los codos de las rejillas y calcula recorridos hasta sus salidas. Prueba giros de 0°, ±15°, ±30° y ±45° hacia el distribuidor."/>
-   <Button Name="Preview" Content="Mostrar en Revit / localizar 3D"/><Button Name="Hide" Content="Ocultar ejes"/>
-   <Button Name="ModelNetwork" Content="Modelar y conectar" Background="#F47721" ToolTip="Crea conductos reales de rutas aprobadas y comprueba cada extremo. Solo recuperación de calor."/>
-   <Button Name="AuditNetwork" Content="Comprobar conexiones"/>
-   <Button Name="SaveProposal" Content="Guardar propuesta"/><Button Name="CancelSearch" Content="Cancelar cálculo"/><Button Name="Close" Content="Cerrar"/>
-  </WrapPanel>
+  <DockPanel Grid.Row="2" Margin="0,12,0,0">
+   <Button Name="Close" Content="Cerrar" DockPanel.Dock="Right" HorizontalAlignment="Right" Margin="12,0,0,0"/>
+   <StackPanel><TextBlock Name="Status" Text="Revise los equipos y destinos para generar corredores." TextWrapping="Wrap" Foreground="#5C6572"/><ProgressBar Name="Progress" Height="3" IsIndeterminate="True" Visibility="Collapsed" Margin="0,8,0,0" Foreground="#F47721"/></StackPanel>
+  </DockPanel>
  </Grid>
 </Window>
