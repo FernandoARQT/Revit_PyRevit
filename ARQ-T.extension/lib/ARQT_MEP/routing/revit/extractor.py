@@ -219,7 +219,12 @@ def configured_model_catalog(doc,settings):
     if not distributors:warnings.append('No hay tipos cargados que coincidan con '+distribution['name_contains'])
     if not transition_id:warnings.append('Flex - Redondo no tiene asignado un tipo de transición cargado.')
     warnings.append('Dimensionado por caudal final y tamaños circulares habilitados de Revit; velocidad máxima {} m/s. Las pérdidas de carga y la presión disponible del recuperador requieren comprobación adicional.'.format(settings.get('sizing',{}).get('max_velocity_mps',3.0)))
-    return {'construction_types':construction,'flexible_duct':{'configuration':flex,'matching_types':flex_types,
+    rigid_types=[{'element_id':rr.eid(t.Id),'name':rr.name(t)} for t in DB.FilteredElementCollector(doc).OfClass(DB.Mechanical.DuctType)
+                 if str(t.Shape)=='Round' and not rr.name(t).startswith('ARQT_MEP_')]
+    system_types=[{'element_id':rr.eid(t.Id),'name':rr.name(t),'classification':str(t.SystemClassification)}
+                  for t in DB.FilteredElementCollector(doc).OfClass(DB.Mechanical.MechanicalSystemType)]
+    return {'construction_types':construction,'rigid_main_types':rigid_types,'mechanical_system_types':system_types,
+            'flexible_duct':{'configuration':flex,'matching_types':flex_types,
                             'listed_diameters_mm':listed,'sizing_diameters_mm':sizing_sizes,'requested_not_listed_mm':[],
                             'transition_type_id':transition_id,'transition_type_name':transition_name,
                             'instance_editability':'REQUIRES_INSTANCE'},
@@ -252,19 +257,20 @@ def get_mep_connection_points(doc,settings):
             for connector in manager.Connectors if manager else []:
                 try:
                     if connector.Domain!=DB.Domain.DomainHvac:continue
-                    p=connector.Origin;n=connector.CoordinateSystem.BasisZ
-                    shape_name=str(connector.Shape)
-                    size={'shape':shape_name}
-                    if shape_name=='Round':size['diameter_mm']=rr.mm(connector.Radius*2)
-                    elif shape_name in ('Rectangular','Oval'):size.update(width_mm=rr.mm(connector.Width),height_mm=rr.mm(connector.Height))
+                    if connector.ConnectorType!=DB.ConnectorType.End:continue
+                    from .connection_points import descriptor
                     system=str(connector.DuctSystemType)
                     role='SUPPLY' if system=='SupplyAir' and str(connector.Direction)=='Out' else 'EXTRACT' if system in ('ReturnAir','ExhaustAir') and str(connector.Direction)=='In' else None
-                    connectors.append({'id':e.UniqueId+':connector:'+str(connector.Id),'element_key':e.UniqueId,'element_id':rr.eid(e.Id),
-                         'connector_id':int(connector.Id),'xyz_mm':[rr.mm(p.X),rr.mm(p.Y),rr.mm(p.Z)],'direction':[n.X,n.Y,n.Z],
-                         'size':size,'classification':system,'flow_direction':str(connector.Direction),'connected':bool(connector.IsConnected),
-                         'network_type':role,'provenance':'REVIT_CONNECTOR'})
+                    connectors.append(dict(descriptor(connector),network_type=role))
                 except Exception as exc:result['warnings'].append('Conector de {} no resuelto: {}'.format(rr.eid(e.Id),exc))
             entry={'id':e.UniqueId,'element_id':rr.eid(e.Id),'name':rr.name(e),'family':e.Symbol.FamilyName,'connectors':connectors}
+            if isinstance(e,DB.FamilyInstance):
+                frame=e.GetTransform()
+                entry['transform']={'origin_mm':[rr.mm(frame.Origin.X),rr.mm(frame.Origin.Y),rr.mm(frame.Origin.Z)],
+                    'basis_x':[frame.BasisX.X,frame.BasisX.Y,frame.BasisX.Z],
+                    'basis_y':[frame.BasisY.X,frame.BasisY.Y,frame.BasisY.Z],
+                    'basis_z':[frame.BasisZ.X,frame.BasisZ.Y,frame.BasisZ.Z]}
+                entry['body_box_mm']=_box(e)
             if cat==DB.BuiltInCategory.OST_DuctTerminal:
                 metadata=ownership.read(e);entry['room_uid']=metadata.get('room_uid') if metadata else None
                 role={'impulsion':'SUPPLY','extraccion':'EXTRACT'}.get(metadata.get('role')) if metadata else None
@@ -276,11 +282,15 @@ def get_mep_connection_points(doc,settings):
                 entry['suggested_network_type']=role;entry['network_assignment_requires_review']=metadata is None and family_role is None
                 entry['airflow_lps'],entry['airflow_parameter'],entry['airflow_candidates']=_terminal_flow(e)
                 from .terminal_adapters import attached,record,ports as adapter_ports
+                candidates=[]
                 if manager:
                     for original_port in adapter_ports(e):
                         adapters=attached(e,original_port)
-                        if len(adapters)>1:raise ValueError('Adaptadores ambiguos para rejilla '+e.UniqueId)
-                        if adapters:entry['terminal_adapter']=record(e,original_port,adapters[0])
+                        candidates.extend((original_port,a) for a in adapters)
+                if len(candidates)==1:
+                    try:entry['terminal_adapter']=record(e,*candidates[0])
+                    except Exception as exc:entry['adapter_association_status']='ELBOW_CONNECTOR_UNRESOLVED';result['warnings'].append(str(exc))
+                elif len(candidates)>1:entry['adapter_association_status']='ELBOW_CONNECTOR_UNRESOLVED'
                 if entry['airflow_lps'] is None:result['warnings'].append('Caudal de instancia ausente o ambiguo: '+e.UniqueId)
                 result['terminals'].append(entry)
             elif connectors:

@@ -68,7 +68,7 @@ def validate(settings):
     s.setdefault('sizing',{'max_velocity_mps':3.0})
     velocity=s['sizing'].get('max_velocity_mps',3.0)
     if not math.isfinite(float(velocity)) or velocity<=0:raise ValueError('Velocidad máxima positiva y finita requerida.')
-    if s['version']!=1 or s['system_id']!='ventilation_radial' or s['routing_strategy']!='RADIAL':
+    if s['version']!=1 or s['system_id']!='ventilation_radial' or s['routing_strategy'] not in ('RADIAL','LEGACY','GLOBAL_RADIAL_V3'):
         raise ValueError('Solo está implementado ventilation_radial / RADIAL.')
     section=s['section']
     if type(section.get('outer_includes_insulation',False)) is not bool:raise ValueError('outer_includes_insulation debe ser booleano.')
@@ -127,7 +127,7 @@ def validate(settings):
         main=s['main_connection']
         if main['kind'] not in ('RIGID_CIRCULAR','FLEXIBLE_CIRCULAR') or not math.isfinite(float(main['diameter_mm'])) or main['diameter_mm']<=0:
             raise ValueError('Conexión principal circular inválida.')
-        main['kind']='FLEXIBLE_CIRCULAR'
+        if s['routing_strategy']!='GLOBAL_RADIAL_V3':main['kind']='FLEXIBLE_CIRCULAR'
     return s
 
 

@@ -9,6 +9,14 @@ EDITOR_READ_OPERATIONS=('get_ventilation_terminals','get_terminal_details','get_
 
 
 def dispatch(doc,operation,payload=None,allow_write=False):
+    # Additive routing bridge; terminal-distribution operations keep their
+    # original dispatch body and contracts below.
+    if operation.startswith(('routing_design_','get_mep_','analyze_mep_','create_mep_','optimize_mep_',
+            'set_mep_','approve_mep_','validate_mep_','select_mep_','preview_mep_','hide_mep_','save_mep_',
+            'get_heat_recovery_','set_heat_recovery_','plan_heat_recovery_','inspect_heat_recovery_',
+            'audit_heat_recovery_','remove_heat_recovery_','model_heat_recovery_','prepare_terminal_adapters')):
+        from .routing.mcp import dispatch as routing_dispatch
+        return routing_dispatch(doc,operation,payload,allow_write=allow_write)
     payload=payload or {}
     if doc is None or doc.IsFamilyDocument:
         raise ValueError('Abra un documento de proyecto.')

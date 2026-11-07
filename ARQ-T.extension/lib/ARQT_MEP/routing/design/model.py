@@ -56,6 +56,10 @@ class Corridor:
     kind:str='MANUAL'
     generated_by:str|None=None
     source_edge_ids:list=field(default_factory=list)
+    source_manifold_id:str|None=None
+    route_ids:list=field(default_factory=list)
+    entity_type:str='MANUAL_GUIDE'
+    preliminary_capacity:dict=field(default_factory=dict)
 
     def __post_init__(self):
         _points(self.reference_xy_mm)
@@ -120,6 +124,12 @@ class RoutingDesignProposal:
     corridor_graph:dict=field(default_factory=dict)
     profiles:dict=field(default_factory=dict)
     catalog:dict=field(default_factory=dict)
+    endpoints:dict=field(default_factory=dict)
+    connectivity:dict=field(default_factory=dict)
+    schematic_junctions:dict=field(default_factory=dict)
+    alternatives:list=field(default_factory=list)
+    selected_paths:dict=field(default_factory=dict)
+    main_connections:dict=field(default_factory=dict)
 
     def to_dict(self):return asdict(self)
 
@@ -176,7 +186,8 @@ def invalidate(p,root):
     return sorted(affected)
 
 
-EDITABLE=('corridors','corridor_assignments','bundles','branches','individual_routes','constraints','manual_edits','dependencies','equipment','design_stage')
+EDITABLE=('corridors','corridor_assignments','bundles','branches','individual_routes','constraints','manual_edits','dependencies','equipment','design_stage',
+          'selected_paths','connectivity','schematic_junctions','main_connections')
 
 
 def _snapshot(p):return {k:copy.deepcopy(getattr(p,k)) for k in EDITABLE}
@@ -197,7 +208,8 @@ def _delta(before,after):
 def _restore(p,state):
     if 'records' not in state:
         reverse=_snapshot(p)
-        for key in EDITABLE:setattr(p,key,copy.deepcopy(state[key]))
+        for key in EDITABLE:
+            if key in state:setattr(p,key,copy.deepcopy(state[key]))
         return reverse
     reverse={'records':{},'values':{}}
     for key,changes in state['records'].items():
@@ -228,6 +240,9 @@ def create(background,name='Esquema de conductos'):
 
 
 def edit(original,operation,payload,expected_revision):
+    if original.configuration.get('routing_strategy')=='GLOBAL_RADIAL_V3' and operation!='add_corridor':
+        from .editing import edit as edit_schematic
+        return edit_schematic(original,operation,payload,expected_revision)
     if type(expected_revision)!=int or original.revision!=expected_revision:raise ValueError('VERSION_CONFLICT: la propuesta ha cambiado; recargue su revisión.')
     p=copy.deepcopy(original);before=_snapshot(p)
     if operation in ('undo','redo'):

@@ -82,19 +82,27 @@ def inspect(doc,parts,snapshot,ignore_element_ids=(),constraints=None,passages=(
                     cache[obstacle['id']]=(actual,[oriented_clearance_bound(s,margin) for s in actual] if margin else actual)
                 actual,envelopes=cache[obstacle['id']];intersection=None
                 for envelope in envelopes:
-                    checked=envelope
-                    if not obstacle.get('hard_forbidden'):
-                        if not obstacle.get('link_uid') and obstacle.get('element_id') in ignore_element_ids:
-                            # Subtract local scopes from the simple obstacle
-                            # envelope, avoiding a cut through a complex spline.
-                            for _,scope in scopes.get(obstacle['element_id'],[]):checked=subtract(checked,scope)
-                        for portal,bore in authorized.bores:
-                            if obstacle['id'] in portal['element_ids']:checked=subtract(checked,bore)
                     for solid in solids:
-                        overlap=intersect(solid,checked)
+                        overlap=intersect(solid,envelope)
+                        # Restrict the expensive cuts to the actual overlap.
+                        # (body ∩ obstacle) \ local-exemption is equivalent to
+                        # intersecting a globally cut obstacle, with fewer
+                        # coincident faces and remote kernel slivers.
+                        if overlap.Volume>1e-9 and not obstacle.get('hard_forbidden'):
+                            if not obstacle.get('link_uid') and obstacle.get('element_id') in ignore_element_ids:
+                                for _,scope in scopes.get(obstacle['element_id'],[]):overlap=subtract(overlap,scope)
+                            for portal,bore in authorized.bores:
+                                if obstacle['id'] in portal['element_ids'] and overlap.Volume>1e-9:overlap=subtract(overlap,bore)
                         if overlap.Volume>1e-9:intersection=overlap;break
                     if intersection is not None:break
                 if intersection is None:continue
+                from .native_clearance import certify
+                cutters=[]
+                if not obstacle.get('hard_forbidden'):
+                    if not obstacle.get('link_uid') and obstacle.get('element_id') in ignore_element_ids:cutters.extend(v for _,v in scopes.get(obstacle['element_id'],[]))
+                    cutters.extend(bore for portal,bore in authorized.bores if obstacle['id'] in portal['element_ids'])
+                proofs=[certify(s,o,margin,cutters) for s in solids for o in actual]
+                if proofs and all(p['verified'] for p in proofs):continue
                 physical=None
                 # Equipment scopes and bore cylinders are valid intentional
                 # contacts; don't report their original solid as a collision.
@@ -108,6 +116,7 @@ def inspect(doc,parts,snapshot,ignore_element_ids=(),constraints=None,passages=(
                     'status':'COLISION_CUERPO_NATIVO' if physical else 'HOLGURA_NO_CERTIFICADA_CON_ENVOLVENTE_CONSERVADORA',
                     'physical_intersection_confirmed':physical,'hard_forbidden':bool(obstacle.get('hard_forbidden')),
                     'clearance_mm':margin,'position_mm':[rr.mm(point.X),rr.mm(point.Y),rr.mm(point.Z)],
+                    'local_clearance_proofs':proofs,
                     'envelope_method':'NATIVE_ORIENTED_BOUND_WITH_CLEARANCE' if margin else 'ACTUAL_NATIVE_SOLIDS'})
             except Exception as exc:
                 result.append({'element_id':element_id,'conflicting_element_id':obstacle.get('element_id'),

@@ -4,6 +4,7 @@ All solids are transient. A failed boolean never authorises geometry. Region
 joins add only volumes already contained in the original union.
 """
 import math
+import time
 from System.Collections.Generic import List
 from pyrevit.api import DB
 from shapely.ops import triangulate,unary_union
@@ -144,6 +145,35 @@ class AuthorizedVolume:
                 except Exception as exc:errors.append(str(exc))
         self.cache[index]=(solids,errors);return solids,errors
 
+    def _partitioned_contains(self,solid,volumes,deadline):
+        from ..core.volume_bounds import contained
+        queue=[(solid,0)];cells=0
+        portals=[p for p,_ in self.bores if self._domain_bore(p)]
+        while queue and cells<4096 and time.monotonic()<deadline:
+            piece,depth=queue.pop();cells+=1;bounds=_solid_box(piece)
+            if contained(bounds,self.regions,self.clearance,portals):continue
+            residual=piece
+            for volume in volumes:
+                if not g.overlaps(bounds,_solid_box(volume)):continue
+                try:
+                    residual=DB.BooleanOperationsUtils.ExecuteBooleanOperation(residual,volume,DB.BooleanOperationsType.Difference)
+                    if residual.Volume<=1e-9:break
+                except Exception:continue
+            if residual.Volume<=1e-9:continue
+            sizes=[bounds[i+3]-bounds[i] for i in range(3)];axis=max(range(3),key=sizes.__getitem__)
+            if depth>=18 or sizes[axis]<2:return {'verified':False,'cells':cells,'reason':'NATIVE_LOCAL_CONTAINMENT_UNRESOLVED'}
+            middle=(bounds[axis]+bounds[axis+3])/2;children=[]
+            try:
+                for lower in (True,False):
+                    clip=list(bounds);clip[axis+3 if lower else axis]=middle
+                    child=DB.BooleanOperationsUtils.ExecuteBooleanOperation(piece,box_solid(g.expand(clip,1.)),DB.BooleanOperationsType.Intersect)
+                    if child.Volume>1e-9:children.append(child)
+            except Exception:return {'verified':False,'cells':cells,'reason':'NATIVE_SUBDIVISION_BOOLEAN_FAILED'}
+            if sum(q.Volume for q in children)<piece.Volume-1e-9:return {'verified':False,'cells':cells,'reason':'NATIVE_SUBDIVISION_VOLUME_NOT_PRESERVED',
+                'parent_volume_mm3':piece.Volume*304.8**3,'child_volume_mm3':sum(q.Volume for q in children)*304.8**3,'bounds_mm':bounds}
+            queue.extend((child,depth+1) for child in children)
+        return {'verified':not queue,'cells':cells,'reason':'NATIVE_PARTITIONED_BOX_AND_BOOLEAN_PROOF' if not queue else 'NATIVE_PARTITION_BUDGET_EXHAUSTED'}
+
     def contains(self,solid):
         residual=solid;errors=[]
         volumes=[b for p,b in self.bores if self._domain_bore(p)]
@@ -158,5 +188,7 @@ class AuthorizedVolume:
                 residual=DB.BooleanOperationsUtils.ExecuteBooleanOperation(residual,allowed,DB.BooleanOperationsType.Difference)
                 if residual.Volume<=1e-9:return {'verified':True,'method':'NATIVE_BODY_MINUS_AUTHORIZED_UNION','clearance_mm':self.clearance}
             except Exception as exc:errors.append(str(exc))
-        return {'verified':False,'method':'NATIVE_BODY_MINUS_AUTHORIZED_UNION','clearance_mm':self.clearance,
-                'remaining_volume_mm3':residual.Volume*304.8**3,'error_count':len(errors),'errors':list(dict.fromkeys(errors))}
+        local=self._partitioned_contains(solid,volumes,time.monotonic()+8.)
+        if local['verified']:return dict(local,method='NATIVE_PARTITIONED_BODY_IN_AUTHORIZED_UNION',clearance_mm=self.clearance)
+        return {'verified':False,'method':'NATIVE_BODY_MINUS_AUTHORIZED_UNION','clearance_mm':self.clearance,'partitioned_check':local,
+                'remaining_volume_mm3':residual.Volume*304.8**3,'remaining_box_mm':_solid_box(residual),'error_count':len(errors),'errors':list(dict.fromkeys(errors))}

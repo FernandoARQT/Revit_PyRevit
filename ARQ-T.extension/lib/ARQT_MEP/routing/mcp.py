@@ -11,11 +11,12 @@ WRITE_OPERATIONS=('prepare_terminal_adapters','set_heat_recovery_equipment_assig
 
 def dispatch(doc,operation,payload=None,allow_write=False,cancelled=None):
     payload=payload or {}
-    from .design.operations import OPERATIONS as DESIGN_OPERATIONS
+    from .design.operations import OPERATIONS as DESIGN_OPERATIONS,WRITE_OPERATIONS as DESIGN_WRITES
     if operation in DESIGN_OPERATIONS:
         if doc is None or doc.IsFamilyDocument:raise ValueError('Abra un documento de proyecto.')
         from .design.adapter import dispatch as design_dispatch
-        return design_dispatch(doc,operation,payload)
+        if operation in DESIGN_WRITES and not allow_write:raise ValueError('Modelar conexiones requiere allow_write=True y confirmación explícita.')
+        return design_dispatch(doc,operation,payload,allow_write=allow_write)
     if operation=='get_mep_system_profiles':return service.get_mep_system_profiles()
     if operation not in READ_OPERATIONS+WRITE_OPERATIONS:raise ValueError('Operación de trazado desconocida: '+operation)
     if operation in WRITE_OPERATIONS and not allow_write:raise ValueError('Esta operación requiere allow_write=True y una acción explícita.')

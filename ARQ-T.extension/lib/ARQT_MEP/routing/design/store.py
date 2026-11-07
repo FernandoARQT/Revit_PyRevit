@@ -56,7 +56,9 @@ def entries(document_id):
         with open(os.path.join(folder,name),encoding='utf8') as stream:data=json.load(stream)
         if data.get('kind')!='RoutingDesignProposal' or data.get('document_identity')!=document_id:continue
         result.append({'proposal_id':data['proposal_id'],'name':data.get('name','Estudio'),
-            'revision':data['revision'],'updated_utc':data['updated_utc'],'corridors':len(data.get('corridors',{}))})
+            'revision':data['revision'],'updated_utc':data['updated_utc'],'corridors':len(data.get('corridors',{})),
+            'strategy':data.get('configuration',{}).get('routing_strategy'),'terminals':len(data.get('terminals',{})),
+            'selected_terminals':len(data.get('selected_paths',{}))})
     return sorted(result,key=lambda p:p['updated_utc'],reverse=True)
 
 
@@ -82,20 +84,29 @@ def publish(document_id,proposal_id,lease,configuration,result):
     return p
 
 
-def capture(document_id,proposal_id,expected_revision,snapshot,catalog,configuration,profile):
+def capture(document_id,proposal_id,expected_revision,snapshot,catalog,configuration,profile,background=None):
     target=path(document_id,proposal_id)
     with terminal_store._lock(target):
         current=get(document_id,proposal_id)
         if type(expected_revision)!=int or current.revision!=expected_revision:raise ValueError('VERSION_CONFLICT')
         if snapshot['document_identity']!=document_id:raise ValueError('Snapshot de otro documento.')
         p=copy.deepcopy(current);p.snapshot=copy.deepcopy(snapshot);p.catalog=copy.deepcopy(catalog)
+        if background is not None:
+            from .model import create
+            refreshed=create(background)
+            p.background=copy.deepcopy(background)
+            for tid,t in refreshed.terminals.items():
+                if tid in p.terminals:p.terminals[tid].update(position_mm=t['position_mm'],level_id=t['level_id'])
         new_profiles={profile.profile_id:__import__('dataclasses').asdict(profile)}
         changed=(current.geometry_revision!=snapshot['geometry_revision'] or current.configuration!=configuration or current.profiles!=new_profiles)
         p.configuration=copy.deepcopy(configuration);p.profiles=new_profiles;p.geometry_revision=snapshot['geometry_revision']
         if changed:
             p.corridor_graph={}
             for cid in p.corridors:invalidate(p,cid)
-            p.validation={};p.solver_state={};p.history=[];p.future=[]
+            p.validation={};p.solver_state={}
+            if configuration.get('routing_strategy')!='GLOBAL_RADIAL_V3':p.history=[];p.future=[]
+            else:
+                for tid in p.connectivity:p.connectivity[tid]['status']='EDITED_PENDING_RECHECK'
         p.revision+=1;p.updated_utc=now();p=RoutingDesignProposal.from_dict(p.to_dict())
         terminal_store._write(target,p.to_dict())
     return p

@@ -65,6 +65,21 @@ def search(space,start,goal,profile,settings,scenario='A',deadline=None,cancelle
         while len(cache)>6:cache.popitem(last=False)
     graph=cache[key];before=graph.checked;reused=graph.reused;initial_nodes=len(graph.points)
     source=graph.add(start);target=graph.add(goal)
+    seed_links=set();seed_indices=[]
+    for point in settings['search'].get('seed_points_mm',[]):seed_indices.append(graph.add(point))
+    for a,b in zip([source]+seed_indices,seed_indices+[target]):
+        if a!=b:seed_links.add(tuple(sorted((a,b))))
+    approach_source=settings['search'].get('approach_source_mm');approach_destination=settings['search'].get('approach_destination_mm')
+    for anchor,origin in ((start,approach_source),(goal,approach_destination)):
+        if origin is None:continue
+        tangent=g.unit(g.sub(anchor,origin));side=g.cross(tangent,(0,0,1))
+        if g.norm(side)<1e-5:side=g.cross(tangent,(0,1,0))
+        side=g.unit(side)
+        for sign in (-1,1):
+            for lead in (bend,2*bend):
+                for span in (2*bend,3*bend):
+                    a=g.add(anchor,g.mul(tangent,lead));b=g.add(a,g.mul(side,sign*span));c=g.add(anchor,g.mul(side,sign*span))
+                    for point in (a,b,c):graph.add(point)
     admitted=SparseGrid(space,start,goal,settings['search']['coarse_resolution_mm'],profile,
                         settings['constraints']['passages'],scenario).portals
     portal_by_id={p['id']:p for p in admitted}
@@ -122,6 +137,7 @@ def search(space,start,goal,profile,settings,scenario='A',deadline=None,cancelle
             nearest=sorted((g.distance(graph.points[i],p),j) for j,p in enumerate(graph.points) if j!=i)
             indices={source,target}|{j for _,j in nearest[:settings['coordination']['roadmap_neighbors']]}
             indices.update(b if a==i else a for a,b in graph.portals if i in (a,b))
+            indices.update(b if a==i else a for a,b in seed_links if i in (a,b))
             neighbor_cache[i]=indices-{i}
         return neighbor_cache[i]
     def checked_edge(i,j):
@@ -140,19 +156,27 @@ def search(space,start,goal,profile,settings,scenario='A',deadline=None,cancelle
         return not any(g.segment_distance(a,b,u,v)<radius+r['radius_mm']-1e-6 for r in space.reservations
                        for u,v in zip(r['points'],r['points'][1:]))
     while not stopped():
-        initial=(source,None,0.,0.);queue=[(g.distance(start,goal),0,next(counter),initial)];costs={initial:0};parents={};found=None
+        initial=(source,-1 if approach_source is not None else None,g.distance(approach_source,start) if approach_source is not None else 0.,0.)
+        queue=[(g.distance(start,goal),0,next(counter),initial)];costs={initial:0};parents={};found=None
         while queue and not stopped():
             _,cost,_,state=heapq.heappop(queue)
             if cost>costs.get(state,float('inf'))+1e-6:continue
             i,previous,run,trim=state;a=graph.points[i]
-            if i==target and run>=trim-1e-5:found=state;break
+            if i==target and run>=trim-1e-5:
+                if approach_destination is not None and previous is not None:
+                    prior=approach_source if previous==-1 else graph.points[previous]
+                    angle=math.acos(max(-1,min(1,g.dot(g.unit(g.sub(a,prior)),g.unit(g.sub(approach_destination,a))))))
+                    required=bend*math.tan(angle/2) if angle<math.pi-1e-6 else float('inf')
+                    if run+1e-5<trim+required or g.distance(a,approach_destination)+1e-5<required or (previous,i,-2) in banned_turns:continue
+                found=state;break
             for j in neighbors(i):
                 pair=tuple(sorted((i,j)))
                 if pair in dynamic_blocked or graph.static.get(pair) is False or (previous,i,j) in banned_turns:continue
                 b=graph.points[j];travel=g.distance(a,b)
                 if travel<.001:continue
                 if profile.max_slope is not None and abs(b[2]-a[2])>profile.max_slope*math.hypot(b[0]-a[0],b[1]-a[1])+1e-6:continue
-                angle=0 if previous is None else math.acos(max(-1,min(1,g.dot(g.unit(g.sub(a,graph.points[previous])),g.unit(g.sub(b,a))))))
+                prior=approach_source if previous==-1 else graph.points[previous] if previous is not None else None
+                angle=0 if prior is None else math.acos(max(-1,min(1,g.dot(g.unit(g.sub(a,prior)),g.unit(g.sub(b,a))))))
                 if angle>math.pi-1e-6:continue
                 required=bend*math.tan(angle/2)
                 if run+1e-5<trim+required:continue
@@ -174,7 +198,13 @@ def search(space,start,goal,profile,settings,scenario='A',deadline=None,cancelle
         if failed:continue
         used=[portal_by_id[graph.portals[tuple(sorted((i,j)))]] for i,j in zip(indices,indices[1:])
               if tuple(sorted((i,j))) in graph.portals and graph.portals[tuple(sorted((i,j)))] in portal_by_id]
-        route={'points_mm':[graph.points[i] for i in indices],'passages':used}
+        if approach_source is not None or approach_destination is not None:
+            used=list({p['id']:p for p in used+list(portal_by_id.values())}.values())
+        route_points=[graph.points[i] for i in indices]
+        if approach_source is not None:route_points.insert(0,approach_source)
+        if approach_destination is not None:route_points.append(approach_destination)
+        route={'points_mm':route_points,'passages':used,'endpoint_stubs':settings['search'].get('endpoint_stubs',[]),
+            'split_passages':settings['search'].get('split_passages',False)}
         report=validate_route_geometry(space,route,profile)
         if report['status'] not in ('INVALID','NOT_EVALUATED'):
             route.update(report);route.update(search_method='INCREMENTAL_LAZY_ROADMAP',roadmap_generation=graph.generation,
@@ -183,9 +213,11 @@ def search(space,start,goal,profile,settings,scenario='A',deadline=None,cancelle
         # Find precisely the colliding turn, rather than discarding a safe
         # shared straight edge. A final validation failure is never accepted.
         changed=False
-        for a,i,b in zip(indices,indices[1:],indices[2:]):
+        turn_indices=([-1] if approach_source is not None else [])+indices+([-2] if approach_destination is not None else [])
+        def point(index):return approach_source if index==-1 else approach_destination if index==-2 else graph.points[index]
+        for a,i,b in zip(turn_indices,turn_indices[1:],turn_indices[2:]):
             try:
-                pieces=primitives([graph.points[a],graph.points[i],graph.points[b]],bend)
+                pieces=primitives([point(a),point(i),point(b)],bend)
                 bad=any(not space.free(u,v,radius+p.get('sagitta_mm',0)) for p in pieces if p['kind']=='ARC'
                         for u,v in zip(p['points_mm'],p['points_mm'][1:]))
             except ValueError:bad=True

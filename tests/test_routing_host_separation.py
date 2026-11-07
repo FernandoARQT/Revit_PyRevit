@@ -14,10 +14,20 @@ class HostSeparation(unittest.TestCase):
         files={
             'ARQ-T.extension/lib/ARQT_MEP/editor_gui.py':'c5fc917e124b6f3930682ac9172a3ec64940acb28d752dc8ff8717130c51c255',
             'ARQ-T.extension/lib/ARQT_MEP/preview_image.py':'14be8c4670284f17f0691ee45f7ebcb00739ee0a1b57011baf9b4b9c02cdb7cf',
-            'ARQ-T.extension/lib/ARQT_MEP/integration.py':'54261c08962c376392556a899f22b5aadc4e23337a8f8268edde05753eddff60',
             'ARQ-T.extension/ARQ-T.tab/MEP.panel/DistribuirVentilacion.pushbutton/script.py':'af9943be6be31c91efb10f6d8270b7d1ec033bfa87119e85c90c6d7974165a7d',
             'ARQ-T.extension/ARQ-T.tab/MEP.panel/DistribuirVentilacion.pushbutton/window.xaml':'9898fc24fba75edc8e1570cfcf6bd29bcb4093c3f14e8c54f474cafe1a5776ca'}
         for name,sha in files.items():self.assertEqual(hashlib.sha256((ROOT/name).read_bytes()).hexdigest(),sha,name)
+
+    def test_shared_dispatch_keeps_the_original_terminal_body(self):
+        import ast,zipfile
+        name='ARQ-T.extension/lib/ARQT_MEP/integration.py'
+        with zipfile.ZipFile(ROOT/'tests/baselines/v3-h0-20261106/source.zip') as archive:before=ast.parse(archive.read(name).decode('utf8'))
+        after=ast.parse((ROOT/name).read_text(encoding='utf8'))
+        function=next(n for n in after.body if isinstance(n,ast.FunctionDef) and n.name=='dispatch')
+        bridge=function.body.pop(0)
+        self.assertIsInstance(bridge,ast.If)
+        self.assertIn('routing_dispatch',ast.dump(bridge))
+        self.assertEqual(ast.dump(before),ast.dump(after))
 
     def test_v3_host_is_only_routing(self):
         self.assertIn('Name="DesignTab"',(ROOT/'ARQ-T.extension/ARQ-T.tab/MEP.panel/TrazadoAutomaticoMEP.pushbutton/window.xaml').read_text(encoding='utf8'))

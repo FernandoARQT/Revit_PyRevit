@@ -2,11 +2,25 @@
 from . import model,store,operations
 
 
-def dispatch(doc,operation,payload=None):
+def dispatch(doc,operation,payload=None,allow_write=False):
     from ... import ownership,revit_read,service,config
     from .. import settings
     from ..revit import extractor,equipment_selection
     payload=payload or {};document_id=ownership.document_id(doc)
+    if operation=='routing_design_assert_current':
+        p=store.get(document_id,payload['proposal_id'])
+        if revit_read.fingerprint(doc)!=p.background['fingerprint']:raise ValueError('OUTDATED: el modelo ha cambiado; vuelva a proponer la distribución para actualizar sus conectores.')
+        return {'current':True}
+    if operation in ('routing_design_native_plan','routing_design_commit','routing_design_audit'):
+        p=store.get(document_id,payload['proposal_id'])
+        if operation=='routing_design_native_plan':
+            from .native_plan import prepare
+            return prepare(p)
+        from . import native
+        if operation=='routing_design_audit':return native.audit(doc,p.proposal_id)
+        if not allow_write:raise ValueError('La operación nativa requiere autorización de escritura.')
+        if p.revision!=payload['expected_revision']:raise ValueError('VERSION_CONFLICT')
+        return native.commit(doc,p,payload['approval_token'],payload.get('explicit',False),payload.get('dry_run',False))
     if operation=='routing_design_create':
         if payload.get('source_proposal_id'):
             from ... import proposal_store as terminals,proposal_adapter
@@ -36,7 +50,8 @@ def dispatch(doc,operation,payload=None):
     if operation=='routing_design_analyze':
         p=store.get(document_id,payload['proposal_id'])
         if p.revision!=payload['expected_revision']:raise ValueError('VERSION_CONFLICT')
-        if revit_read.fingerprint(doc)!=p.background['fingerprint']:raise ValueError('OUTDATED: el modelo ha cambiado; cree o actualice el contexto del trazador.')
+        changed=revit_read.fingerprint(doc)!=p.background['fingerprint']
+        if changed and p.configuration.get('routing_strategy')!='GLOBAL_RADIAL_V3':raise ValueError('OUTDATED: el modelo ha cambiado; cree o actualice el contexto del trazador.')
         profile=model.DuctProfile(**payload['duct_profile'])
         configuration=settings.validate(payload.get('configuration',p.configuration or equipment_selection.read(doc)))
         clearance=float(payload.get('clearance_mm',10))
@@ -44,5 +59,13 @@ def dispatch(doc,operation,payload=None):
         envelope(profile,clearance);configuration['design_clearance_mm']=clearance
         snapshot=extractor.analyze_mep_geometry(doc,configuration)
         catalog=extractor.get_mep_connection_points(doc,configuration)
-        return store.capture(document_id,p.proposal_id,payload['expected_revision'],snapshot,catalog,configuration,profile).to_dict()
+        background=None
+        if changed:
+            from .background import from_catalog
+            analysis_settings=dict(config.DEFAULT)
+            if configuration.get('phase_id') is not None:analysis_settings['phase_id']=configuration['phase_id']
+            analysis=service.analyze_ventilation_rooms(doc,analysis_settings)
+            analysis['view_frame']={}
+            background=from_catalog(analysis,catalog,payload.get('destinations',[]),document_id,revit_read.fingerprint(doc))
+        return store.capture(document_id,p.proposal_id,payload['expected_revision'],snapshot,catalog,configuration,profile,background).to_dict()
     return operations.dispatch(document_id,operation,payload)

@@ -42,3 +42,20 @@ def build(points,bend_radius_mm):
     return {'segments':segments,'vertices_mm':[list(p) for p in vertices],
         'native_controls_mm':controls,'native_control_count':len(controls),
         'scope':'Tangency geometry; native FlexDuct interpolation still requires body validation'}
+
+
+def interpolation_supports(pieces,spacing_mm):
+    """Uniform supports for one native flexible curve, preserving exact arcs."""
+    if not math.isfinite(spacing_mm) or spacing_mm<=0:raise ValueError('Separación de apoyos inválida.')
+    result=[]
+    for piece in pieces:
+        length=g.distance(piece['start'],piece['end']) if piece['kind']=='LINE' else piece['radius_mm']*piece['angle_rad']
+        count=max(1,math.ceil(length/spacing_mm))
+        for i in range(count+1):
+            t=i/count
+            if piece['kind']=='LINE':point=g.add(piece['start'],g.mul(g.sub(piece['end'],piece['start']),t))
+            else:
+                vector=g.sub(piece['start'],piece['center']);theta=piece['angle_rad']*t
+                point=g.add(piece['center'],g.add(g.mul(vector,math.cos(theta)),g.mul(g.cross(piece['axis'],vector),math.sin(theta))))
+            if not result or g.distance(result[-1],point)>1e-5:result.append(list(point))
+    return result

@@ -134,7 +134,9 @@ def find_route_3d(space,start,goal,profile,search,step,passages=(),scenario='A',
     if not grid.node_free(grid.start) or not grid.node_free(grid.goal):
         return {'status':'NOT_EVALUATED','reason':'ENDPOINT_CLEARANCE_AT_RESOLUTION','resolution_mm':step,'expanded':0}
     required=2*profile.bend_radius_mm
-    start_state=(grid.start,None,0,0)
+    start_heading=search.get('start_direction')
+    start_heading=tuple(round(v,7) for v in g.unit(start_heading)) if start_heading else None
+    start_state=(grid.start,start_heading,float(search.get('start_straight_mm',0)),0)
     serial=itertools.count();queue=[(g.distance(start,goal)/1000*profile.weights['length'],0,next(serial),start_state)]
     costs={start_state:0};parents={};expanded=0;goal_state=None;closest=start_state
     def incomplete(reason):
@@ -155,7 +157,14 @@ def find_route_3d(space,start,goal,profile,search,step,passages=(),scenario='A',
             if expanded>=search['max_nodes'] or time.monotonic()-started>=search['max_seconds']:
                 return incomplete('SEARCH_LIMIT')
         node,arrival,straight,previous_trim=state
-        if node==grid.goal and straight+1e-5>=previous_trim:goal_state=state;break
+        if node==grid.goal and straight+1e-5>=previous_trim:
+            wanted=search.get('end_direction')
+            if wanted and arrival:
+                angle=math.acos(max(-1,min(1,g.dot(arrival,g.unit(wanted)))))
+                if angle>math.pi-1e-6:continue
+                trim=profile.bend_radius_mm*math.tan(angle/2) if angle>1e-6 else 0
+                if straight+1e-5<previous_trim+trim or search.get('end_straight_mm',0)+1e-5<trim:continue
+            goal_state=state;break
         a=grid.point(node)
         for nxt,portal in grid.neighbors(node):
             b=grid.point(nxt);travel=g.distance(a,b);heading=direction(a,b)

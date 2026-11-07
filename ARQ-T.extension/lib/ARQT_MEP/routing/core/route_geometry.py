@@ -77,6 +77,7 @@ def primitives(points,bend_radius):
 
 
 def passage_for(a,b,passages,radius):
+    if g.distance(a,b)<1e-6:return None
     for p in passages:
         c,d=p['points_mm'];axis=g.unit(g.sub(d,c));length=g.distance(c,d)
         if p['radius_mm']<radius:continue
@@ -84,6 +85,23 @@ def passage_for(a,b,passages,radius):
         if all(-1e-4<=g.dot(g.sub(q,c),axis)<=length+1e-4 and g.point_segment(c,d,q)<.1 for q in (a,b)):
             return p
     return None
+
+
+def split_passage_line(a,b,passages,radius):
+    length=g.distance(a,b)
+    if length<1e-6:return [(a,b)]
+    axis=g.unit(g.sub(b,a));stations={0.,length}
+    for portal in passages:
+        if portal['radius_mm']<radius:continue
+        c,d=portal['points_mm']
+        if abs(g.dot(axis,g.unit(g.sub(d,c))))<.99999:continue
+        if max(g.point_segment(a,b,q) for q in (c,d))>.1:continue
+        stations.update(max(0,min(length,g.dot(g.sub(q,a),axis))) for q in (c,d))
+    distinct=[]
+    for t in sorted(stations):
+        if not distinct or t-distinct[-1]>1e-5:distinct.append(t)
+    points=[g.add(a,g.mul(axis,t)) for t in distinct]
+    return list(zip(points,points[1:]))
 
 
 def tangent_joint(a,b):
@@ -124,7 +142,8 @@ def validate_route_geometry(space,route,profile):
         'errors':[{'segment':i,'reason':'CURVE_BELOW_NATIVE_TOLERANCE','minimum_mm':profile.min_curve_length_mm} for i in too_short],
         'primitives':[]}
     for index,piece in enumerate(pieces):
-        for a,b in zip(piece['points_mm'],piece['points_mm'][1:]):
+        segments=split_passage_line(piece['start'],piece['end'],passages,radius) if route.get('split_passages') and piece['kind']=='LINE' else list(zip(piece['points_mm'],piece['points_mm'][1:]))
+        for a,b in segments:
             samples.extend([a,b]);extra=piece.get('sagitta_mm',0)
             portal=passage_for(a,b,passages,radius)
             endpoint_ignore=[]

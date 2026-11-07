@@ -11,12 +11,10 @@ def ports(e):return [c for c in e.MEPModel.ConnectorManager.Connectors if c.Doma
 def mm(p):return [rr.mm(p.X),rr.mm(p.Y),rr.mm(p.Z)]
 def vector(p):return [p.X,p.Y,p.Z]
 def descriptor(c):
-    return {'id':c.Owner.UniqueId+':connector:'+str(c.Id),'element_key':c.Owner.UniqueId,'element_id':rr.eid(c.Owner.Id),
-        'connector_id':int(c.Id),'xyz_mm':mm(c.Origin),'direction':vector(c.CoordinateSystem.BasisZ),
-        'size':{'shape':'Round','diameter_mm':rr.mm(2*c.Radius)},'connected':bool(c.IsConnected),
-        'classification':str(c.DuctSystemType),'flow_direction':str(c.Direction),'provenance':'REVIT_CONNECTOR',
-        'connected_to_cap':any(isinstance(r.Owner,DB.FamilyInstance) and r.Owner.Symbol.FamilyName=='M_Remate redondo - DTL'
-            and c.IsConnectedTo(r) for r in c.AllRefs if r.ConnectorType==DB.ConnectorType.End)}
+    from .connection_points import descriptor as physical_descriptor
+    data=physical_descriptor(c)
+    data['connected_to_cap']=any(r['family']=='M_Remate redondo - DTL' for r in data['physical_refs'])
+    return data
 
 def attached(terminal,port):
     return [r.Owner for r in port.AllRefs if r.Owner.Id!=terminal.Id and r.ConnectorType==DB.ConnectorType.End

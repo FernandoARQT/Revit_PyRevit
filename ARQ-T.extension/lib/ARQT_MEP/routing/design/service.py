@@ -32,6 +32,15 @@ def calculate_graph(p,options=None,cancelled=None):
     """Worker-only computation. No store writes or live Revit access."""
     if not p.snapshot or not p.profiles:raise ValueError('Analice el edificio y defina un perfil de conducto antes de generar corredores.')
     profile=model.DuctProfile(**next(iter(p.profiles.values())))
+    if (options or {}).get('task')=='AXES':
+        from .axes import calculate
+        return calculate(p,profile,options,cancelled)
+    if p.configuration.get('routing_strategy')=='GLOBAL_RADIAL_V3':
+        from .planner import calculate
+        result=calculate(p,profile,options,cancelled)
+        if cancelled and cancelled() and p.solver_state.get('selected_paths'):
+            old=copy.deepcopy(p);old.corridor_graph['last_attempt']={'cancelled':True};return old
+        return result
     levels=region_levels(p)
     if not levels:raise ValueError('No hay cámaras con una planta identificada en el ámbito.')
     anchors=[{'xyz_mm':t['position_mm'],'level_id':t['level_id']} for t in p.terminals.values()]
@@ -64,3 +73,7 @@ def generate_corridors(document_id,proposal_id,expected_revision,options=None,ca
     from .process import calculate
     result=calculate(p,options or {},cancelled)
     return store.publish(document_id,proposal_id,lease,p.configuration,result)
+
+
+def calculate_axes(document_id,proposal_id,expected_revision,options=None,cancelled=None):
+    return generate_corridors(document_id,proposal_id,expected_revision,dict(options or {},task='AXES'),cancelled)

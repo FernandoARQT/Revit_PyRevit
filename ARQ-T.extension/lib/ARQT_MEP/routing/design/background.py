@@ -17,7 +17,7 @@ def check(data):
 def from_catalog(analysis,catalog,destinations,document_id,fingerprint,room_uids=None):
     rooms=[r for r in analysis['rooms'] if not r.get('excluded_exterior') and (room_uids is None or r['uid'] in room_uids)]
     if not rooms:raise ValueError('No hay habitaciones interiores en el ámbito del trazador.')
-    by_uid={r['uid']:r for r in rooms};lookup={t['id']:t for t in catalog['terminals']};items=[];seen=set()
+    by_uid={r['uid']:r for r in rooms};lookup={t['id']:t for t in catalog['terminals']};items=[];seen=set();counters={'SUPPLY':0,'EXTRACT':0}
     for value in destinations:
         if not value.get('include',True):continue
         tid=value.get('terminal_id');entry=lookup.get(tid)
@@ -40,10 +40,11 @@ def from_catalog(analysis,catalog,destinations,document_id,fingerprint,room_uids
             room=ranked[0][2]
         flow=entry.get('airflow_lps')
         if flow is None or not math.isfinite(flow) or flow<=0:raise ValueError('Caudal de destino no verificable: '+tid)
+        counters[network]+=1
         items.append({'terminal_id':tid,'existing_uid':tid,'existing_id':entry['element_id'],'room_uid':room['uid'],
             'level_id':room['level_id'],'role':'impulsion' if network=='SUPPLY' else 'extraccion','flow':flow,
             'x':point[0],'y':point[1],'z':point[2],'lock_full':False,'lock_position':False,
-            'display_id':('I' if network=='SUPPLY' else 'E')+str(len(items)+1).zfill(2),
+            'display_id':('I' if network=='SUPPLY' else 'E')+str(counters[network]).zfill(2),
             'connector':copy.deepcopy(ports[0])})
     return terminals.seal({'kind':'RoutingPlanBackground','schema_version':1,'version':1,
         'proposal_id':'routing-background-'+uuid.uuid4().hex,'document_id':document_id,'fingerprint':fingerprint,

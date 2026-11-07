@@ -3,32 +3,47 @@ import time
 import warnings
 
 
-def solve(admitted,order,conflict,deadline,cancelled=None,known_conflicts=()):
+def solve(admitted,order,conflict,deadline,cancelled=None,known_conflicts=(),
+          resources=(),activation_costs=None,excluded_selections=()):
     try:
         from ...runtime import scientific_context
         with scientific_context():
             import numpy as np
             from scipy.optimize import milp,Bounds,LinearConstraint
     except ImportError:return None,{'backend':'PYTHON_BRANCH_AND_BOUND','available':False}
-    columns=[(rid,i) for rid in order for i in range(len(admitted.get(rid,[])))]
-    if not columns:return {},{'backend':'SCIPY_HIGHS_MILP','cuts':0}
+    candidate_columns=[(rid,i) for rid in order for i in range(len(admitted.get(rid,[])))]
+    if not candidate_columns:return {},{'backend':'SCIPY_HIGHS_MILP','cuts':0}
+    activations=sorted(activation_costs or {})
+    columns=candidate_columns+[('__activation__:'+eid,0) for eid in activations]
+    count=len(candidate_columns)
     rows=[];upper=[];cuts=set();calls=0;best=None;primary_optimal=False;primary_connections=None
     for rid in order:
         rows.append([int(key==rid) for key,_ in columns]);upper.append(1)
     column_index={key:i for i,key in enumerate(columns)}
+    for resource in resources:
+        rows.append([resource.get('demands',{}).get(key,0.) for key in columns]);upper.append(float(resource['capacity']))
+    for selection in excluded_selections:
+        indices={column_index[key] for key in selection if key in column_index}
+        if indices:rows.append([int(i in indices) for i in range(len(columns))]);upper.append(len(indices)-1)
+    for eid in activations:
+        y=column_index[('__activation__:'+eid,0)]
+        for key in candidate_columns:
+            if eid not in admitted[key[0]][key[1]].get('edge_ids',[]):continue
+            row=[0.]*len(columns);row[column_index[key]]=1.;row[y]=-1.;rows.append(row);upper.append(0.)
     for a,b in known_conflicts:
         if a not in column_index or b not in column_index:continue
         pair=tuple(sorted((column_index[a],column_index[b])))
         if pair in cuts:continue
         cuts.add(pair);rows.append([int(i in pair) for i in range(len(columns))]);upper.append(1)
     initial_cuts=len(cuts)
-    condition=np.array([int(admitted[rid][i]['status']=='CONDITIONAL') for rid,i in columns],dtype=float)
-    cost=np.array([admitted[rid][i].get('cost',{}).get('total',0) for rid,i in columns],dtype=float)
-    pressure=[admitted[rid][i].get('pressure_assessment',{}) for rid,i in columns]
+    condition=np.array([int(admitted[rid][i]['status']=='CONDITIONAL') for rid,i in candidate_columns]+[0]*len(activations),dtype=float)
+    cost=np.array([admitted[rid][i].get('cost',{}).get('total',0) for rid,i in candidate_columns]+[0]*len(activations),dtype=float)
+    pressure=[admitted[rid][i].get('pressure_assessment',{}) for rid,i in candidate_columns]
     pressure_known=all(p.get('status')=='ESTIMATED_FROM_REFERENCED_DATA' and admitted[rid][i].get('pressure_objective_enabled',False)
-                       for (rid,i),p in zip(columns,pressure))
-    objectives=[-np.ones(len(columns)),condition]
-    if pressure_known:objectives.append(np.array([p['pressure_loss_pa'] for p in pressure]))
+                       for (rid,i),p in zip(candidate_columns,pressure))
+    objectives=[np.array([-1.]*count+[0.]*len(activations)),condition]
+    if activations:objectives.append(np.array([0.]*count+[activation_costs[eid] for eid in activations]))
+    if pressure_known:objectives.append(np.array([p['pressure_loss_pa'] for p in pressure]+[0.]*len(activations)))
     objectives.append(cost)
     while time.monotonic()<deadline and not (cancelled and cancelled()):
         matrix=list(rows);low=[-np.inf]*len(rows);high=list(upper);selection=None;restart=False
@@ -43,7 +58,7 @@ def solve(admitted,order,conflict,deadline,cancelled=None,known_conflicts=()):
                     options={'time_limit':min(remaining,2.),'mip_rel_gap':0.0,'threads':1})
             calls+=1
             if answer.x is None:break
-            selected=[i for i,value in enumerate(answer.x) if value>.5]
+            selected=[i for i,value in enumerate(answer.x[:count]) if value>.5]
             new=[]
             for pos,a in enumerate(selected):
                 for b in selected[pos+1:]:
@@ -62,4 +77,5 @@ def solve(admitted,order,conflict,deadline,cancelled=None,known_conflicts=()):
             value=float(objective@answer.x);matrix.append(objective);low.append(value-1e-7);high.append(value+1e-7)
         if not restart:break
     return best,{'backend':'SCIPY_HIGHS_MILP','cuts':len(cuts),'initial_cuts':initial_cuts,'solver_calls':calls,'primary_optimal':primary_optimal,'primary_connections':primary_connections,'limit_reached':time.monotonic()>=deadline,'verified_pressure_objective':pressure_known,
+                 'resource_constraints':len(resources),'activation_variables':len(activations),
                  'scope':'supplied candidates; exact swept-volume conflict separation'}

@@ -45,7 +45,8 @@ def payload(catalog,configuration,selected,destinations,profile,clearance_mm):
     from .spatial import envelope
     envelope(profile,clearance_mm)
     configuration=copy.deepcopy(configuration)
-    configuration.update(hrv_id=selected['HRV'],equipment_assignments=assignments)
+    configuration.update(hrv_id=selected['HRV'],equipment_assignments=assignments,routing_strategy='GLOBAL_RADIAL_V3')
+    if configuration.get('main_connection'):configuration['main_connection']['kind']='RIGID_CIRCULAR'
     return {'configuration':configuration,'destinations':copy.deepcopy(destinations),
         'duct_profile':asdict(profile),'clearance_mm':clearance_mm}
 
@@ -61,11 +62,24 @@ def stage(proposal,busy=False):
 def summary(proposal):
     if proposal is None:return 'Seleccione equipos y destinos. Generar corredores analiza el modelo y abre el resultado en planta.'
     graph=proposal.corridor_graph;stats=graph.get('stats',{})
+    if proposal.configuration.get('routing_strategy')=='GLOBAL_RADIAL_V3':
+        if proposal.design_stage=='AXES':
+            routes=proposal.individual_routes;valid=sum(r.get('validation_status')=='GEOMETRICALLY_VALID' for r in routes.values())
+            mains=sum(r.get('validation_status')=='GEOMETRICALLY_VALID' for r in proposal.main_connections.values())
+            return 'Ejes · {} válidos / {} ramales · principales {}/2 · {} destinos sin distribución · conexiones sin modelar'.format(valid,len(routes),mains,len(proposal.terminals)-len(proposal.selected_paths))
+        counts={n:sum(t['network_type']==n for t in proposal.terminals.values()) for n in ('SUPPLY','EXTRACT')}
+        connected={n:sum(proposal.terminals[t]['network_type']==n for t in proposal.corridor_assignments) for n in counts}
+        pending=len(proposal.terminals)-sum(connected.values())
+        conditional=sum(r.get('status')=='CONDITIONAL_PASSAGE_REQUIRED' for r in proposal.connectivity.values())
+        return 'Distribución · impulsión {}/{} · extracción {}/{} · {} pendientes · {} condicionados · ejes individuales pendientes'.format(
+            connected['SUPPLY'],counts['SUPPLY'],connected['EXTRACT'],counts['EXTRACT'],pending,conditional)
+    if any(c.get('generated_by')=='V3_FREE_SPACE_GRAPH' for c in proposal.corridors.values()):
+        return 'Estudio anterior de candidatos geométricos. Pulse Proponer distribución para obtener conexiones completas hasta los codos.'
     if not graph:
         return 'Borrador sin cálculo automático. Pulse Generar corredores para analizar el edificio y obtener ejes de estudio.'
     count=len(proposal.corridors)
     if not count:
-        if not stats.get('nodes'):return 'No se ha encontrado espacio para la envolvente indicada. Revise volumen de falso techo, diámetro exterior y holgura.'
+        if not stats.get('nodes'):return 'No hay candidatos para la envolvente y representación actuales. Revise volumen, perfil y alcance; no demuestra imposibilidad física.'
         return 'Hay puntos libres, pero no tramos continuos comprobados en el presupuesto disponible. Revise las incidencias o amplíe el cálculo.'
     suffix=' · estudio parcial por límite de cálculo' if not stats.get('enumeration_finished',False) else ''
     return '{} corredores de estudio · {} terminales{} · doble clic en un tramo para añadir un punto'.format(count,len(proposal.terminals),suffix)
