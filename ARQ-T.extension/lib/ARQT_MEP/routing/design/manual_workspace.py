@@ -20,7 +20,10 @@ class ManualWorkspace(Workspace):
         self.ui['AlternativeInfo'].Text='Dibuje un corredor, seleccione las rejillas y pulse Asignar al corredor.'
         self.ui['ManualNetwork'].Items.RemoveAt(2);self.ui['ManualNetwork'].SelectedIndex=0
         self.ui['ManualNetwork'].IsEnabled=False
-        self.ui['IncludeMains'].IsChecked=self.configuration.get('manual_bundle',{}).get('include_mains',True)
+        self.ui['IncludeMains'].IsChecked=False
+        self.ui['IncludeMains'].Visibility=Visibility.Collapsed
+        self.ui['HeatRecovery'].Visibility=Visibility.Collapsed
+        self.window.FindName('HeatRecoveryLabel').Visibility=Visibility.Collapsed
         self.ui['ActiveManifold'].SelectionChanged+=self.safe(self.active_manifold_changed)
         for name,fn in (('AssignTerminals',self.assign_terminals),('RemoveTerminals',self.remove_terminals),
             ('SetBranchWaypoint',self.set_branch_waypoint),('ClearBranchWaypoint',lambda:self.set_branch_waypoint(clear=True)),
@@ -87,7 +90,7 @@ class ManualWorkspace(Workspace):
                 flow=lookup[str(row['TerminalId'])].get('airflow_lps')
                 row['Include']=bool(row['PortId'] and str(row['Network']) in ('SUPPLY','EXTRACT') and flow is not None and math.isfinite(flow) and flow>0)
             result=super().inputs();result['configuration']['routing_strategy']=manual_bundle.STRATEGY
-            result['configuration'].setdefault('manual_bundle',{})['include_mains']=bool(self.ui['IncludeMains'].IsChecked)
+            result['configuration'].setdefault('manual_bundle',{}).update(include_mains=False,allow_collisions=True)
             return result
         finally:
             for row,value in zip(self.terminals.Rows,previous):row['Include']=value
@@ -161,11 +164,28 @@ class ManualWorkspace(Workspace):
             '{} codos a rotar'.format(summary['elbow_rotations']),
             '{} flexibles y {} principales rigidas'.format(summary['flexible_branches'],summary['rigid_mains']),
             '{} pasos previstos, con huecos de obra pendientes'.format(summary['planned_penetrations']),'',
+            '{} avisos de colision nativa pendientes de resolver.'.format(len(report.get('collision_warnings',[]))),
             'La comprobacion reversible ha finalizado correctamente. Aplicar esta revision al proyecto?'])
         if MessageBox.Show(self.window,text,'ARQ-T · Aplicar conexiones',MessageBoxButton.YesNo,MessageBoxImage.Question)!=MessageBoxResult.Yes:
             self.info('Se conserva el borrador; la comprobación temporal se ha revertido.');return
         final=self.dispatch(self.doc,'routing_design_commit',payload,allow_write=True)
-        self.info('Conexiones nativas comprobadas · {} recorridos.'.format(final['routes']))
+        self.info('{} recorridos conectados · {} avisos de colisión pendientes de revisar.'.format(final['routes'],len(final.get('collision_warnings',[]))))
+
+    def diagnostics(self):
+        super().diagnostics()
+        p=self.proposal
+        if not p or not self.axes_mode():return
+        names={t['terminal_id']:t.get('display_id',t['terminal_id']) for t in p.background['terminals']}
+        warnings=[]
+        for rid,route in p.individual_routes.items():
+            count=len(route.get('collision_warnings',[]))
+            height=any(h.get('warning') for h in route.get('height_profile',[]))
+            if count or height:
+                warnings.append('{} · posible colisión o espacio sin verificar; revisar en Revit'.format(names.get(route.get('terminal_id'),rid)))
+        if warnings:
+            text=self.ui['Diagnostics'].Text
+            if text.startswith('Ejes geométricamente comprobados.'):text=''
+            self.ui['Diagnostics'].Text='\n'.join(([text] if text else [])+warnings)
 
     def request(self,operation,payload=None,revision=None):
         if self.busy:raise ValueError('Espere a que termine el cálculo.')
@@ -189,7 +209,7 @@ class ManualWorkspace(Workspace):
         self.catalog=p.catalog
         super().adopt(p,load_settings)
         self.configuration=copy.deepcopy(p.configuration)
-        if load_settings and self.ui.get('IncludeMains'):self.ui['IncludeMains'].IsChecked=p.configuration.get('manual_bundle',{}).get('include_mains',True)
+        if load_settings and self.ui.get('IncludeMains'):self.ui['IncludeMains'].IsChecked=False
         self.ui['AlternativeInfo'].Text='Dibuje los corredores y asigne sus rejillas. Cada terminal pertenece a un único corredor.'
         mapping=manual_bundle.assigned(p)
         labels={cid:'Corredor '+str(i+1) for i,cid in enumerate(p.corridors)}

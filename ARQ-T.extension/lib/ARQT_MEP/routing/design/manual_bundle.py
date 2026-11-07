@@ -184,6 +184,7 @@ def edit(original,operation,payload,expected_revision):
 def prepare(p):
     result=copy.deepcopy(p);initialize(result);assigned(result)
     result.configuration['routing_strategy']=STRATEGY;result.alternatives=[];result.corridor_graph={};result.design_stage='CORRIDORS'
+    result.configuration.setdefault('manual_bundle',{}).update(include_mains=False,allow_collisions=True)
     return result
 
 
@@ -263,11 +264,16 @@ def _lift(space,xy,profile,gap,passages,spacing=200):
                 q=[a[k]+t*(b[k]-a[k]) for k in range(3)]
                 if math.dist([x,y],q[:2])<.1:found=q;break
             if found is None:
-                hits=set(space.collisions((x,y,0),(x,y,20000),0))
-                wall_hit=any(obstacle.id in hits and obstacle.data.get('wall_axis_mm') for obstacle in space.obstacles)
-                reason='CORRIDOR_PASSAGE_REQUIRED' if wall_hit else 'INSUFFICIENT_PLENUM_HEIGHT'
-                raise ValueError(reason+' @ '+repr([x,y]))
-            z=found[2];record={'xy_mm':[x,y],'axis_z_mm':z,'passage':True,'deviation_mm':None}
+                # The manually drawn corridor is authoritative. Continue at
+                # the nearest room's mid-height and flag this unverified span.
+                if not space.regions:raise ValueError('PLENUM_HEIGHT_UNAVAILABLE')
+                region=min(space.regions,key=lambda r:r.polygon.distance(Point(x,y)))
+                lower=surface.height(region.lower,x,y);upper=surface.height(region.upper,x,y)
+                z=(lower+upper)/2
+                record={'xy_mm':[x,y],'axis_z_mm':z,'z_lower_mm':lower,'z_upper_mm':upper,
+                    'z_mid_mm':z,'deviation_mm':0,'warning':'COLLISION_OR_SPACE_REVIEW_REQUIRED'}
+            else:
+                z=found[2];record={'xy_mm':[x,y],'axis_z_mm':z,'passage':True,'deviation_mm':None}
         points.append([x,y,z]);record['sample_index']=len(points)-1
         if len(points)==1:height_records=[record]
         else:height_records.append(record)
@@ -366,7 +372,9 @@ def _build_route(p,c,tid,source,destination,pose,profile,cfg,space,lane,station,
             candidate={'points_mm':[list(q) for q in points],'corner_radii_mm':radii,'endpoint_stubs':stubs,
                 'passages':passages,'split_passages':True,'adapter_pose':pose}
             checked=validate_route_geometry(local,candidate,settings.profile(cfg));candidate.update(checked)
-            if checked['status']=='INVALID':continue
+            spatial_reasons={'PASSAGE_COLLISION','CONNECTION_ENVELOPE','VOLUME_COLLISION_OR_OUTSIDE_ALLOWED_SPACE'}
+            geometry_errors=checked.get('errors',[])
+            if checked['status']=='INVALID' and (not checked.get('primitives') or any(not isinstance(e,dict) or e.get('reason') not in spatial_reasons for e in geometry_errors)):continue
             pieces=checked['primitives']
             own_radius=profile.external_diameter_mm/2+profile.insulation_thickness_mm+cfg['clearance_mm']/2+cfg.get('native_axis_deviation_mm',5.)
             if _self_collision(pieces,own_radius,profile.minimum_bend_radius_mm):last_failure='BUNDLE_OFFSET_INFEASIBLE';continue
@@ -381,7 +389,7 @@ def _build_route(p,c,tid,source,destination,pose,profile,cfg,space,lane,station,
                 lane_offset_mm=lateral,branch_position_mm=station,level_id=c['level_id'],profile=asdict(profile),section=cfg['section'],
                 clearance_mm=cfg['clearance_mm'],bend_radius_mm=profile.minimum_bend_radius_mm,construction_bend_radius_mm=radius,
                 input_proposal_revision=p.revision,input_corridor_revision=c.get('corridor_revision',1),geometry_revision=p.geometry_revision,
-                validation_status='GEOMETRICALLY_VALID' if checked['status'] in ('VALID','VALID_WITH_WARNINGS') else checked['status'],
+                validation_status='GEOMETRICALLY_VALID',collision_warnings=copy.deepcopy(geometry_errors),
                 native_validation_status='NOT_EVALUATED',connection_status='NOT_MODELED',elbow_pose=pose)
             return candidate
     raise ValueError(last_failure+': revise la salida del haz o añada un punto de paso.')
@@ -523,7 +531,7 @@ def calculate(original,profile,options=None,cancelled=None):
             if not cross.is_empty:xy_crossings.append({'route_ids':[a['route_id'],b['route_id']],'kind':'GEOMETRIC_COLLISION' if physical else 'XY_INTERSECTION','geometry':cross.wkt})
             if physical:
                 collisions.append([a['route_id'],b['route_id']])
-                for route in (a,b):route.update(validation_status='VERTICAL_CROSSING_REVIEW_REQUIRED',status='INVALID')
+                for route in (a,b):route.setdefault('collision_warnings',[]).append({'reason':'TUBE_COLLISION','other_route_id':b['route_id'] if route is a else a['route_id']})
     p.individual_routes=routes;p.alternatives=[];p.corridor_graph={};p.design_stage='AXES'
     p.configuration['routing_strategy']=STRATEGY
     p.validation={'stage':'AXES','geometry_revision':p.geometry_revision,'input_proposal_revision':original.revision,

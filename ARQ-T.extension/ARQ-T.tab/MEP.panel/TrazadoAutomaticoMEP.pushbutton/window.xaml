@@ -30,7 +30,7 @@
      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <StackPanel>
        <DockPanel Margin="0,0,0,10"><TextBlock Text="Preparación" FontSize="16" FontWeight="Bold"/><Button Name="RefreshEquipment" Content="Actualizar" DockPanel.Dock="Right" HorizontalAlignment="Right" Padding="7,4" Margin="0"/></DockPanel>
-       <TextBlock Text="Recuperador" Foreground="#707782" Margin="0,3,0,4"/><ComboBox Name="HeatRecovery"/>
+       <TextBlock Name="HeatRecoveryLabel" Text="Recuperador" Foreground="#707782" Margin="0,3,0,4"/><ComboBox Name="HeatRecovery"/>
        <TextBlock Text="Distribuidor de impulsión" Foreground="#707782" Margin="0,11,0,4"/><ComboBox Name="SupplyManifold"/>
        <TextBlock Text="Distribuidor de extracción" Foreground="#707782" Margin="0,11,0,4"/><ComboBox Name="ExtractManifold"/>
        <TextBlock Name="EquipmentInfo" Foreground="#707782" TextWrapping="Wrap" FontSize="10.5" Margin="0,7,0,12"/>

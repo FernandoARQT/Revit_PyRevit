@@ -34,7 +34,8 @@ def defaults(catalog,configuration):
 
 def payload(catalog,configuration,selected,destinations,profile,clearance_mm):
     choices=equipment_choices(catalog);lookup={d['id']:d for d in catalog.get('devices',[])}
-    if selected.get('HRV') not in {d['id'] for d in choices['HRV']}:raise ValueError('Seleccione el recuperador de referencia.')
+    manual=configuration.get('routing_strategy')=='MANUAL_BUNDLE'
+    if not manual and selected.get('HRV') not in {d['id'] for d in choices['HRV']}:raise ValueError('Seleccione el recuperador de referencia.')
     if not destinations:raise ValueError('Seleccione al menos un terminal para estudiar los corredores.')
     networks={d['network_type'] for d in destinations};assignments=[]
     for network in sorted(networks):
@@ -46,7 +47,7 @@ def payload(catalog,configuration,selected,destinations,profile,clearance_mm):
     envelope(profile,clearance_mm)
     configuration=copy.deepcopy(configuration)
     strategy='MANUAL_BUNDLE' if configuration.get('routing_strategy')=='MANUAL_BUNDLE' else 'GLOBAL_RADIAL_V3'
-    configuration.update(hrv_id=selected['HRV'],equipment_assignments=assignments,routing_strategy=strategy)
+    configuration.update(hrv_id=selected.get('HRV'),equipment_assignments=assignments,routing_strategy=strategy)
     if configuration.get('main_connection'):configuration['main_connection']['kind']='RIGID_CIRCULAR'
     return {'configuration':configuration,'destinations':copy.deepcopy(destinations),
         'duct_profile':asdict(profile),'clearance_mm':clearance_mm}
@@ -65,7 +66,8 @@ def summary(proposal):
         assigned=len(proposal.corridor_assignments)
         if proposal.design_stage=='AXES':
             valid=len(proposal.validation.get('valid_route_ids',[]))
-            return '{} ejes válidos de {} asignados · {} corredores manuales · modelo nativo pendiente'.format(valid,assigned,len(proposal.corridors))
+            warnings=sum(bool(r.get('collision_warnings') or any(h.get('warning') for h in r.get('height_profile',[]))) for r in proposal.individual_routes.values())
+            return '{} ejes calculados de {} asignados · {} con incidencias a revisar · modelo nativo pendiente'.format(valid,assigned,warnings)
         return '{} corredores manuales · {} destinos asignados · dibuje, asigne rejillas y calcule los ejes'.format(len(proposal.corridors),assigned)
     if proposal is None:return 'Seleccione equipos y destinos. Generar corredores analiza el modelo y abre el resultado en planta.'
     graph=proposal.corridor_graph;stats=graph.get('stats',{})

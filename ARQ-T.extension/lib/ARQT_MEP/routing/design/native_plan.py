@@ -18,9 +18,6 @@ def prepare(p):
     if not p.validation.get('coordination'):blockers.append({'code':'JOINT_VALIDATION_REQUIRED'})
     main_ids={'main:'+p.corridors[cid]['source_manifold_id'] for cid in assignment.values()} if manual else {'main:SUPPLY','main:EXTRACT'}
     if manual and not p.configuration.get('manual_bundle',{}).get('include_mains',True):main_ids=set()
-    if manual and not main_ids:
-        for uid in {p.corridors[cid]['source_manifold_id'] for cid in assignment.values()}:
-            if not p.equipment[uid]['main_port'].get('connected'):blockers.append({'code':'EXISTING_MAIN_CONTINUITY_REQUIRED','distributor_uid':uid})
     if set(p.main_connections)!=main_ids:blockers.append({'code':'MAIN_CONNECTIONS_REQUIRED'})
     expected={'axis:'+tid for tid in (assignment if manual else p.selected_paths)}
     if set(p.individual_routes)!=expected:blockers.append({'code':'BRANCH_AXES_INCOMPLETE','missing_route_ids':sorted(expected-set(p.individual_routes))})

@@ -268,6 +268,8 @@ def audit(doc,proposal_id):
 
 def commit(doc,p,approval_token,explicit=False,dry_run=False):
     plan=native_plan.authorize(p,approval_token,explicit)
+    allow_collisions=p.configuration.get('routing_strategy')=='MANUAL_BUNDLE' and p.configuration.get('manual_bundle',{}).get('allow_collisions',False)
+    collision_warnings=[]
     if ownership.document_id(doc)!=p.document_identity:raise ValueError('MODEL_DOCUMENT_MISMATCH')
     prior=audit(doc,p.proposal_id)
     if prior['routes']:
@@ -287,7 +289,9 @@ def commit(doc,p,approval_token,explicit=False,dry_run=False):
             from ..revit.geometry_conflicts import inspect
             moved=[doc.GetElement(DB.ElementId(v['element_id'])) for v in plan['equipment_movements']]
             failures=inspect(doc,moved,fresh,constraints=p.configuration['constraints'],clearance_mm=p.configuration['design_clearance_mm'])
-            if failures:raise ValueError('NATIVE_MOVED_EQUIPMENT_CONFLICT: '+str(failures))
+            if failures:
+                if not allow_collisions:raise ValueError('NATIVE_MOVED_EQUIPMENT_CONFLICT: '+str(failures))
+                collision_warnings.append({'code':'NATIVE_MOVED_EQUIPMENT_CONFLICT','details':failures})
         if rotated_elbows:
             from ..revit.geometry_conflicts import inspect,subtract
             from ..revit.terminal_adapters import mount_scope
@@ -299,18 +303,25 @@ def commit(doc,p,approval_token,explicit=False,dry_run=False):
                 trimmed=[subtract(solid,collar) for solid in rr.solids(elbow)]
                 solids_by_id[rr.eid(elbow.Id)]=[solid for solid in trimmed if solid.Volume>1e-9]
             failures=inspect(doc,rotated_elbows,fresh,constraints=p.configuration['constraints'],clearance_mm=p.configuration['design_clearance_mm'],solids_by_id=solids_by_id)
-            if failures:raise ValueError('NATIVE_ELBOW_ROTATION_CONFLICT: '+str(failures))
+            if failures:
+                if not allow_collisions:raise ValueError('NATIVE_ELBOW_ROTATION_CONFLICT: '+str(failures))
+                collision_warnings.append({'code':'NATIVE_ELBOW_ROTATION_CONFLICT','details':failures})
         for route in plan['routes']:
             record=_create(doc,route,p.configuration);created.append(record)
         doc.Regenerate()
-        joint_check=_joint_bodies(created,plan['routes'])
+        try:joint_check=_joint_bodies(created,plan['routes'])
+        except ValueError as exc:
+            if not allow_collisions or not str(exc).startswith('NATIVE_JOINT_COLLISION_OR_UNVERIFIED_CLEARANCE:'):raise
+            joint_check={'verified':False,'warning':str(exc)};collision_warnings.append({'code':'NATIVE_JOINT_COLLISION','detail':str(exc)})
         after=extractor.get_mep_connection_points(doc,p.configuration)
         _assert_terminal_state(terminal_state,_terminal_state(after,p.terminals))
         from ..revit.geometry_conflicts import inspect
         for record,route in zip(created,plan['routes']):
             failures=inspect(doc,record['ducts']+record['fittings'],fresh,
                 [route['source']['element_id'],route['destination']['element_id']],p.configuration['constraints'],route['passages'],route['clearance_mm'],record['connection_envelopes'])
-            if failures:raise ValueError('NATIVE_GEOMETRY_CONFLICT: '+str(failures))
+            if failures:
+                if not allow_collisions:raise ValueError('NATIVE_GEOMETRY_CONFLICT: '+str(failures))
+                collision_warnings.append({'code':'NATIVE_GEOMETRY_CONFLICT','route_id':route['route_id'],'details':failures})
             manifest=DB.ExtensibleStorage.DataStorage.Create(doc)
             payload={'kind':KIND,'document_id':p.document_identity,'proposal_id':p.proposal_id,'proposal_revision':p.revision,
                 'route_id':route['route_id'],'source':route['source'],'destination':route['destination'],
@@ -319,15 +330,15 @@ def commit(doc,p,approval_token,explicit=False,dry_run=False):
                 'terminal_port':next((t['terminal_adapter']['terminal_port'] for t in catalog['terminals'] if t['id']==route.get('terminal_id') and t.get('terminal_adapter')),None),
                 'end_ids':record['end_ids'],'end_element_ids':record['end_element_ids'],
                 'members':[rr.eid(e.Id) for e in record['ducts']+record['fittings']],
-                'geometry_status':'NATIVE_GEOMETRY_VALID','curve_checks':record['curve_checks']}
-            if p.configuration.get('routing_strategy')=='MANUAL_BUNDLE' and route.get('route_kind')=='BRANCH':
+                'geometry_status':'COLLISIONS_PENDING_REVIEW' if failures else 'NATIVE_GEOMETRY_VALID','curve_checks':record['curve_checks']}
+            if p.configuration.get('routing_strategy')=='MANUAL_BUNDLE' and p.configuration.get('manual_bundle',{}).get('include_mains',False) and route.get('route_kind')=='BRANCH':
                 equipment=p.equipment[route['distributor_uid']]
                 payload.update(principal_source=descriptor(network_model.resolve(doc,equipment['main_port'])),hrv_uid=p.configuration['hrv_id'])
             proposals._tag(manifest,payload)
         report=audit(doc,p.proposal_id)
         if not report['native_connections_valid']:raise ValueError('NATIVE_AUDIT_FAILED: '+str(report['failures']))
         report.update(created=[{'route_id':r['route_id'],'members':[rr.eid(e.Id) for e in r['ducts']+r['fittings']]} for r in created],
-            geometry_status='NATIVE_GEOMETRY_VALID_IN_AUTHORIZED_BORES',joint_check=joint_check,terminals_preserved=True,
+            geometry_status='COLLISIONS_PENDING_REVIEW' if collision_warnings else 'NATIVE_GEOMETRY_VALID_IN_AUTHORIZED_BORES',collision_warnings=collision_warnings,joint_check=joint_check,terminals_preserved=True,
             planned_penetrations=plan['summary']['planned_penetrations'],openings_created=False,hydraulic_status='NOT_EVALUATED',dry_run=dry_run,atomic=True)
         if dry_run:tx.RollBack();group.RollBack();report['native_elements_kept']=False
         else:
