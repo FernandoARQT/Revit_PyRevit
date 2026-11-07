@@ -163,6 +163,7 @@ class ManualWorkspace(Workspace):
             '{} distribuidores a girar'.format(summary['manifold_rotations']),
             '{} codos a rotar'.format(summary['elbow_rotations']),
             '{} flexibles y {} principales rigidas'.format(summary['flexible_branches'],summary['rigid_mains']),
+            '{} ramales pendientes; no se modelaran en esta operacion'.format(summary['pending_branches']),
             '{} pasos previstos, con huecos de obra pendientes'.format(summary['planned_penetrations']),'',
             '{} avisos de colision nativa pendientes de resolver.'.format(len(report.get('collision_warnings',[]))),
             'La comprobacion reversible ha finalizado correctamente. Aplicar esta revision al proyecto?'])

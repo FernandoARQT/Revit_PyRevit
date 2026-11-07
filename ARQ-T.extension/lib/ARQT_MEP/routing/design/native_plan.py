@@ -7,11 +7,20 @@ from . import schematic
 def prepare(p):
     blockers=[];routes=list(p.individual_routes.values())+list(p.main_connections.values())
     manual=p.configuration.get('routing_strategy')=='MANUAL_BUNDLE'
+    pending=[]
     if manual:
         from .manual_bundle import assigned
         assignment=assigned(p)
         if not assignment:blockers.append({'code':'MANUAL_CORRIDOR_ASSIGNMENT_REQUIRED'})
-        if set(p.selected_paths)!=set(assignment):blockers.append({'code':'SCHEMATIC_INCOMPLETE','pending_terminal_ids':sorted(set(assignment)-set(p.selected_paths))})
+        eligible=[]
+        for tid in assignment:
+            route=p.individual_routes.get('axis:'+tid)
+            if route and route.get('validation_status')=='GEOMETRICALLY_VALID' and tid in p.selected_paths and route.get('primitives') and route.get('source') and route.get('destination'):
+                eligible.append(route)
+            else:
+                pending.append({'route_id':'axis:'+tid,'terminal_id':tid,'reason':(route or {}).get('validation_status','AXIS_NOT_EVALUATED')})
+        routes=eligible+list(p.main_connections.values())
+        if not eligible:blockers.append({'code':'NO_MODELABLE_BRANCHES'})
     if p.design_stage!='AXES':blockers.append({'code':'AXES_REQUIRED'})
     if not manual and len(p.selected_paths)!=len(p.terminals):blockers.append({'code':'SCHEMATIC_INCOMPLETE','pending_terminal_ids':sorted(set(p.terminals)-set(p.selected_paths))})
     if p.selected_paths and not manual:schematic.check(p)
@@ -20,7 +29,7 @@ def prepare(p):
     if manual and not p.configuration.get('manual_bundle',{}).get('include_mains',True):main_ids=set()
     if set(p.main_connections)!=main_ids:blockers.append({'code':'MAIN_CONNECTIONS_REQUIRED'})
     expected={'axis:'+tid for tid in (assignment if manual else p.selected_paths)}
-    if set(p.individual_routes)!=expected:blockers.append({'code':'BRANCH_AXES_INCOMPLETE','missing_route_ids':sorted(expected-set(p.individual_routes))})
+    if not manual and set(p.individual_routes)!=expected:blockers.append({'code':'BRANCH_AXES_INCOMPLETE','missing_route_ids':sorted(expected-set(p.individual_routes))})
     native_catalog=p.catalog.get('configured_model',{})
     rigid_types=native_catalog.get('rigid_main_types',[])
     requested=p.configuration.get('main_connection',{}).get('type_id')
@@ -44,6 +53,7 @@ def prepare(p):
             if passage['classification']=='CONDITIONAL' and passage['id'] not in p.configuration['constraints']['approved_passages']:
                 blockers.append({'code':'PASSAGE_APPROVAL_REQUIRED','route_id':rid,'portal_id':passage['id']})
     for network,equipment in p.equipment.items():
+        if manual and not any(r.get('distributor_uid')==equipment['id'] for r in routes):continue
         if equipment.get('original_transform')!=equipment.get('proposed_transform'):
             device=next((d for d in p.catalog.get('devices',[]) if d['id']==equipment['id']),None)
             if not device or any(port.get('connected') for port in device['connectors']):blockers.append({'code':'VIRTUAL_MOVE_HAS_EXISTING_CONNECTIONS','network_type':network,
@@ -52,14 +62,16 @@ def prepare(p):
             if state.get('pinned') or state.get('grouped') or state.get('hosted'):blockers.append({'code':'MANIFOLD_MOVE_UNAVAILABLE','element_id':equipment['element_id'],'modification':state})
             movements.append({'element_id':equipment['element_id'],'network_type':equipment.get('network_type',network),
                 'original_transform':equipment.get('original_transform'),'proposed_transform':equipment.get('proposed_transform')})
+    route_terminals={r.get('terminal_id') for r in routes}
+    elbow_movements=[pose for tid,pose in p.elbow_rotations.items() if not manual or tid in route_terminals]
     payload={'proposal_id':p.proposal_id,'proposal_revision':p.revision,'document_identity':p.document_identity,
-        'geometry_revision':p.geometry_revision,'routes':routes,'equipment_movements':movements,'elbow_movements':list(p.elbow_rotations.values()),
+        'geometry_revision':p.geometry_revision,'routes':routes,'pending_routes':pending,'equipment_movements':movements,'elbow_movements':elbow_movements,
         'configuration':p.configuration,'configuration_hash':hashlib.sha256(json.dumps(p.configuration,sort_keys=True,allow_nan=False).encode()).hexdigest()}
     token=hashlib.sha256(json.dumps(payload,sort_keys=True,allow_nan=False).encode()).hexdigest()
     return dict(payload,approval_token=token,ready=not blockers,blockers=blockers,
         summary={'flexible_branches':sum(r.get('route_kind','BRANCH')=='BRANCH' for r in routes),
             'rigid_mains':sum(r.get('route_kind')=='MAIN' for r in routes),'equipment_movements':len(movements),
-            'elbow_rotations':len(p.elbow_rotations),
+            'elbow_rotations':len(elbow_movements),'pending_branches':len(pending),
             'manifold_translations':sum(any(abs(a-b)>.001 for a,b in zip(v['original_transform']['origin_mm'],v['proposed_transform']['origin_mm'])) for v in movements),
             'manifold_rotations':sum(any(abs(a-b)>1e-7 for axis in ('x','y','z') for a,b in zip(v['original_transform']['basis_'+axis],v['proposed_transform']['basis_'+axis])) for v in movements),
             'planned_penetrations':len({q['id'] for r in routes for q in r.get('passages',[])}),

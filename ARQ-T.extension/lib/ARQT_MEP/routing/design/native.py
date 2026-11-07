@@ -262,7 +262,7 @@ def audit(doc,proposal_id):
             cm=network_model.manager(element)
             if cm and any(c.ConnectorType==DB.ConnectorType.End and not c.IsConnected for c in cm.Connectors):
                 failures.append({'route_id':record['route_id'],'code':'UNEXPECTED_OPEN_END','element_id':element_id})
-    return {'routes':len(records),'connections':rows,'failures':failures,'native_connections_valid':bool(records) and not failures,
+    return {'routes':len(records),'route_ids':[r['route_id'] for r in records],'connections':rows,'failures':failures,'native_connections_valid':bool(records) and not failures,
         'approval_tokens':sorted({r.get('approval_token','') for r in records}),'proposal_revisions':sorted({r.get('proposal_revision',0) for r in records})}
 
 
@@ -274,7 +274,8 @@ def commit(doc,p,approval_token,explicit=False,dry_run=False):
     prior=audit(doc,p.proposal_id)
     if prior['routes']:
         if prior['routes']==len(plan['routes']) and prior['native_connections_valid'] and prior['approval_tokens']==[approval_token] and prior['proposal_revisions']==[p.revision]:return dict(prior,already_modeled=True,created=[])
-        raise ValueError('EXISTING_NETWORK_REQUIRES_EXPLICIT_REVIEW')
+        if p.configuration.get('routing_strategy')!='MANUAL_BUNDLE' or not prior['native_connections_valid'] or set(prior['route_ids']) & {r['route_id'] for r in plan['routes']}:
+            raise ValueError('EXISTING_NETWORK_REQUIRES_EXPLICIT_REVIEW')
     fresh=extractor.analyze_mep_geometry(doc,p.configuration)
     if fresh['geometry_revision']!=p.geometry_revision:raise ValueError('OUTDATED_GEOMETRY')
     catalog=extractor.get_mep_connection_points(doc,p.configuration)
