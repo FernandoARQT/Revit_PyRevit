@@ -44,7 +44,7 @@ def overlaps(a,ra,b,rb):
     ra=float(ra)-shared/2
     rb=float(rb)-shared/2
     for own,other,radius in ((a,b,rb),(b,a,ra)):
-        box=own.get('adapter_pose',{}).get('body_box_mm')
+        box=(own.get('adapter_pose') or {}).get('body_box_mm')
         if box:
             body=g.TriangleSolid(*g.box_mesh(g.expand(box,ra if own is a else rb)))
             path=points(other)

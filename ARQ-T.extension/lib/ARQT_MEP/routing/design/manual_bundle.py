@@ -453,9 +453,11 @@ def calculate(original,profile,options=None,cancelled=None):
             destinations[tid]=ports;projections[tid]=project(c['reference_xy_mm'],ports[0]['xyz_mm'][:2])
         right=sorted((t for t in destinations if projections[t]['side']!='LEFT'),key=lambda t:(projections[t]['station_mm'],t))
         left=sorted((t for t in destinations if projections[t]['side']=='LEFT'),key=lambda t:(projections[t]['station_mm'],t),reverse=True)
-        order=right+left;offsets={tid:(i-(len(order)-1)/2)*(diameter+gap) for i,tid in enumerate(order)}
+        # Pairwise sweeps inflate each tube by its own clearance; the lane
+        # pitch must use the same two-sided envelope or every pair conflicts.
+        order=right+left;offsets={tid:(i-(len(order)-1)/2)*(diameter+2*gap) for i,tid in enumerate(order)}
         base_radius=profile.minimum_bend_radius_mm*1.2+max(map(abs,offsets.values()),default=0)
-        width=len(order)*diameter+max(0,len(order)-1)*gap
+        width=len(order)*diameter+max(0,len(order)-1)*2*gap
         c['preliminary_capacity']={'required_width_mm':width,'status':'PENDING_FULL_SWEEP'}
         origin=c['reference_xy_mm'][0];a,b=c['reference_xy_mm'][:2];length=math.dist(a,b);normal=(-(b[1]-a[1])/length,(b[0]-a[0])/length)
         ports=[v['port'] for v in equipment.get('available_ports',[]) if v['port']['id'] not in used_ports and not v['port']['connected'] and abs(v['port']['size'].get('diameter_mm',0)-profile.nominal_diameter_mm)<.1]
