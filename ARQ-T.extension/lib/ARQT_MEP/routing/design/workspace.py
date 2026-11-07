@@ -48,7 +48,7 @@ class Workspace:
         self.ui['Budget'].SelectedIndex=1
         actions={'Generate':self.generate,'CancelGeneration':self.cancel,'RefreshEquipment':self.refresh,
             'NewStudy':self.new,'DuplicateStudy':self.duplicate,'RecoverStudies':self.list_studies,'ExportPlan':self.export,
-            'FitPlan':self.plan.fit,'DrawCorridor':lambda:self.plan.set_mode('corridor'),'FinishDrawing':self.plan.finish,
+            'FitPlan':self.plan.fit,'DrawCorridor':self.start_corridor,'FinishDrawing':self.plan.finish,
             'CancelDrawing':self.plan.cancel,'Undo':lambda:self.request('undo'),'Redo':lambda:self.request('redo'),
             'MovePoint':self.move_point,'InsertPoint':lambda:self.plan.set_mode('insert_vertex'),
             'DeletePoint':self.delete_point,'DeleteCorridor':lambda:self.request('delete_corridor',{'corridor_id':self.selected()}),
@@ -93,6 +93,8 @@ class Workspace:
         return self.levels[i][0] if 0<=i<len(self.levels) else None
 
     def manual_network(self):return model.NETWORKS[max(0,self.ui['ManualNetwork'].SelectedIndex)]
+
+    def start_corridor(self):self.plan.set_mode('corridor')
 
     def axes_mode(self):return self.ui['Mode'].SelectedIndex==1
 

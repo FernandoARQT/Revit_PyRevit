@@ -68,6 +68,11 @@ class ManualWorkspace(Workspace):
     def manifold_changed(self):
         if self.ui.get('ActiveManifold'):self.active_manifold_changed()
 
+    def start_corridor(self):
+        if not self.active_uid():raise ValueError('Seleccione un distribuidor antes de dibujar el corredor.')
+        if self.axes_mode():self.ui['Mode'].SelectedIndex=0
+        self.plan.set_mode('corridor')
+
     def select_manifold(self,uid):
         if not hasattr(self,'manual_equipment'):return
         self.ui['ActiveManifold'].SelectedIndex=next((i for i,v in enumerate(self.manual_equipment) if v['id']==uid),-1)
@@ -225,11 +230,13 @@ class ManualWorkspace(Workspace):
         finally:self.rendering=False
 
     def new(self):
+        self.ui['Mode'].SelectedIndex=0
         super().new();self._active_choices();self.info('Nuevo estudio manual. Prepare la planta, dibuje los corredores y asigne las rejillas.')
 
     def controls(self):
         super().controls()
         p=self.proposal;axis=self.axes_mode();selected=bool(p and self.plan.selected in self.view().corridors)
+        self.ui['DrawCorridor'].IsEnabled=bool(p and not self.busy)
         self.ui['CalculateAxes'].IsEnabled=bool(p and p.corridor_assignments and not self.busy)
         self.ui['ManualNetwork'].IsEnabled=False;self.ui['CorridorNetwork'].IsEnabled=False
         for name in ('MovePoint','InsertPoint','DeletePoint'):self.ui[name].IsEnabled=bool(selected and not axis and not self.busy)
