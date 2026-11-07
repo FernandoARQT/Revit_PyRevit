@@ -60,6 +60,7 @@ class Corridor:
     route_ids:list=field(default_factory=list)
     entity_type:str='MANUAL_GUIDE'
     preliminary_capacity:dict=field(default_factory=dict)
+    corridor_revision:int=1
 
     def __post_init__(self):
         _points(self.reference_xy_mm)
@@ -130,6 +131,7 @@ class RoutingDesignProposal:
     alternatives:list=field(default_factory=list)
     selected_paths:dict=field(default_factory=dict)
     main_connections:dict=field(default_factory=dict)
+    elbow_rotations:dict=field(default_factory=dict)
 
     def to_dict(self):return asdict(self)
 
@@ -187,7 +189,7 @@ def invalidate(p,root):
 
 
 EDITABLE=('corridors','corridor_assignments','bundles','branches','individual_routes','constraints','manual_edits','dependencies','equipment','design_stage',
-          'selected_paths','connectivity','schematic_junctions','main_connections')
+          'selected_paths','connectivity','schematic_junctions','main_connections','elbow_rotations')
 
 
 def _snapshot(p):return {k:copy.deepcopy(getattr(p,k)) for k in EDITABLE}
@@ -240,6 +242,9 @@ def create(background,name='Esquema de conductos'):
 
 
 def edit(original,operation,payload,expected_revision):
+    if original.configuration.get('routing_strategy')=='MANUAL_BUNDLE':
+        from .manual_bundle import edit as edit_manual
+        return edit_manual(original,operation,payload,expected_revision)
     if original.configuration.get('routing_strategy')=='GLOBAL_RADIAL_V3' and operation!='add_corridor':
         from .editing import edit as edit_schematic
         return edit_schematic(original,operation,payload,expected_revision)

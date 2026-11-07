@@ -141,7 +141,7 @@ class Workspace:
             for rid,route in dict(p.individual_routes,**p.main_connections).items():
                 state=route.get('validation_status','NOT_EVALUATED')
                 if state=='GEOMETRICALLY_VALID':continue
-                detail=next((r.get('search_reason') or r.get('reason') for r in reversed(route.get('search_attempts',[])) if r.get('search_reason') or r.get('reason')),route.get('reason',''))
+                detail=next((r.get('search_reason') or r.get('reason') for r in reversed(route.get('search_attempts',[])) if r.get('search_reason') or r.get('reason')),route.get('reason') or route.get('detail',''))
                 rows.append('{} · {}{}'.format(names.get(route.get('terminal_id'),rid),labels.get(state,state),' · '+detail if detail else ''))
             self.ui['Diagnostics'].Text='\n'.join(rows) or ('Ejes geométricamente comprobados. Validación nativa pendiente.' if p.individual_routes else 'Calcule los ejes de la distribución seleccionada.')
         else:self.ui['Diagnostics'].Text='\n'.join(names.get(tid,tid)+' · '+r['status'] for tid,r in p.connectivity.items() if r.get('status')!='TOPOLOGICALLY_REACHABLE') or 'Sin destinos pendientes en el esquema. Ejes y modelado pendientes.'
@@ -499,7 +499,7 @@ class Workspace:
         self.closed=True;self.timer.Stop();self.cancel_event.set();self.executor.shutdown(wait=False,cancel_futures=True)
 
 
-def show(doc,uidoc,_on_loaded=None,_context=None):
+def show(doc,uidoc,_on_loaded=None,_context=None,_strategy='MANUAL_BUNDLE'):
     if doc is None or doc.IsFamilyDocument:raise ValueError('Abra un proyecto Revit.')
     if _context is None:
         from .. import settings
@@ -511,7 +511,9 @@ def show(doc,uidoc,_on_loaded=None,_context=None):
         identity=project_identity(doc);dispatch=shared_dispatch
     else:
         configuration=_context['configuration'];catalog=_context['catalog'];identity=_context['identity'];dispatch=_context['dispatch']
-    path=os.path.abspath(os.path.join(os.path.dirname(__file__),'..','..','..','..','ARQ-T.tab','MEP.panel','TrazadoAutomaticoMEP.pushbutton','window.xaml'))
+    configuration=copy.deepcopy(configuration);configuration['routing_strategy']=_strategy
+    filename='window.xaml' if _strategy=='MANUAL_BUNDLE' else 'global_v3_window.xaml'
+    path=os.path.abspath(os.path.join(os.path.dirname(__file__),'..','..','..','..','ARQ-T.tab','MEP.panel','TrazadoAutomaticoMEP.pushbutton',filename))
     with open(path,encoding='utf8') as f:window=XamlReader.Parse(f.read())
     from System.Windows import SystemParameters
     area=SystemParameters.WorkArea;window.Width=min(window.Width,area.Width-24);window.Height=min(window.Height,area.Height-24)
@@ -519,8 +521,11 @@ def show(doc,uidoc,_on_loaded=None,_context=None):
     if uidoc is not None:
         from System.Windows.Interop import WindowInteropHelper
         WindowInteropHelper(window).Owner=uidoc.Application.MainWindowHandle
-    controller=Workspace(window,doc,uidoc,identity,configuration,catalog,dispatch)
-    controller.ui['DocumentLabel'].Text=doc.Title+' · ventilación radial · estudio de corredores en planta'
+    if _strategy=='MANUAL_BUNDLE':
+        from .manual_workspace import ManualWorkspace
+        controller=ManualWorkspace(window,doc,uidoc,identity,configuration,catalog,dispatch)
+    else:controller=Workspace(window,doc,uidoc,identity,configuration,catalog,dispatch)
+    controller.ui['DocumentLabel'].Text=doc.Title+' · ventilación radial · '+('corredores manuales y haces ordenados' if _strategy=='MANUAL_BUNDLE' else 'planificador anterior')
     if _on_loaded:window.ContentRendered+=lambda *args:_on_loaded(window,controller.ui,window.Tag)
     window.ShowDialog()
     if window.Tag.get('open_legacy'):

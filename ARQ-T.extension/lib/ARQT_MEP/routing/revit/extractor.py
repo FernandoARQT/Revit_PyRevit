@@ -247,6 +247,13 @@ def _terminal_flow(element):
 
 def get_mep_connection_points(doc,settings):
     configured=configured_model_catalog(doc,settings)
+    managed={}
+    if settings.get('routing_strategy')=='MANUAL_BUNDLE':
+        from .proposals import metadata
+        for storage in DB.FilteredElementCollector(doc).OfClass(DB.ExtensibleStorage.DataStorage):
+            data=metadata(storage)
+            if data and data.get('kind') in ('HRV_MODELED_NETWORK','RADIAL_V3_NETWORK'):
+                for element_id in data.get('members',[]):managed[element_id]={'kind':data['kind'],'proposal_id':data.get('proposal_id'),'route_id':data.get('route_id')}
     result={'devices':[],'terminals':[],'configured_model':configured,'warnings':list(configured['warnings']),
             'terminal_adapters_required':True}
     for cat in (DB.BuiltInCategory.OST_DuctTerminal,DB.BuiltInCategory.OST_MechanicalEquipment,DB.BuiltInCategory.OST_DuctFitting,DB.BuiltInCategory.OST_DuctAccessory,DB.BuiltInCategory.OST_GenericModel):
@@ -264,6 +271,9 @@ def get_mep_connection_points(doc,settings):
                     connectors.append(dict(descriptor(connector),network_type=role))
                 except Exception as exc:result['warnings'].append('Conector de {} no resuelto: {}'.format(rr.eid(e.Id),exc))
             entry={'id':e.UniqueId,'element_id':rr.eid(e.Id),'name':rr.name(e),'family':e.Symbol.FamilyName,'connectors':connectors}
+            if settings.get('routing_strategy')=='MANUAL_BUNDLE':
+                entry['existing_connections']=[dict(ref,source_connector_id=port['connector_id'],managed=managed.get(ref['owner_element_id']),
+                    safe_reconstruction_available=False) for port in connectors for ref in port.get('physical_refs',[])]
             if isinstance(e,DB.FamilyInstance):
                 frame=e.GetTransform()
                 entry['transform']={'origin_mm':[rr.mm(frame.Origin.X),rr.mm(frame.Origin.Y),rr.mm(frame.Origin.Z)],
@@ -271,6 +281,9 @@ def get_mep_connection_points(doc,settings):
                     'basis_y':[frame.BasisY.X,frame.BasisY.Y,frame.BasisY.Z],
                     'basis_z':[frame.BasisZ.X,frame.BasisZ.Y,frame.BasisZ.Z]}
                 entry['body_box_mm']=_box(e)
+                entry['level_id']=rr.eid(e.LevelId)
+                entry['modification']={'pinned':bool(e.Pinned),'grouped':e.GroupId!=DB.ElementId.InvalidElementId,
+                    'hosted':e.Host is not None,'host_element_id':rr.eid(e.Host.Id) if e.Host is not None else None}
             if cat==DB.BuiltInCategory.OST_DuctTerminal:
                 metadata=ownership.read(e);entry['room_uid']=metadata.get('room_uid') if metadata else None
                 role={'impulsion':'SUPPLY','extraccion':'EXTRACT'}.get(metadata.get('role')) if metadata else None

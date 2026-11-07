@@ -90,13 +90,37 @@ def _joint_bodies(created,routes):
 def _move_equipment(doc,movements):
     for change in movements:
         element=doc.GetElement(DB.ElementId(change['element_id']));original=change['original_transform'];proposed=change['proposed_transform']
+        _modifiable(element)
         current=element.GetTransform();origin=[rr.mm(current.Origin.X),rr.mm(current.Origin.Y),rr.mm(current.Origin.Z)]
         if g.distance(origin,original['origin_mm'])>.1:raise ValueError('VIRTUAL_MANIFOLD_OUTDATED')
-        before=original['basis_x'];after=proposed['basis_x'];angle=math.atan2(before[0]*after[1]-before[1]*after[0],before[0]*after[0]+before[1]*after[1])
+        for name,vector in (('x',current.BasisX),('y',current.BasisY),('z',current.BasisZ)):
+            if g.distance((vector.X,vector.Y,vector.Z),original['basis_'+name])>1e-6:raise ValueError('VIRTUAL_MANIFOLD_ORIENTATION_OUTDATED')
+        axis=max(('x','y','z'),key=lambda name:math.hypot(*original['basis_'+name][:2]))
+        before=original['basis_'+axis];after=proposed['basis_'+axis];angle=math.atan2(before[0]*after[1]-before[1]*after[0],before[0]*after[0]+before[1]*after[1])
         if abs(angle)>1e-8:DB.ElementTransformUtils.RotateElement(doc,element.Id,DB.Line.CreateUnbound(current.Origin,DB.XYZ.BasisZ),angle)
         delta=g.sub(proposed['origin_mm'],original['origin_mm'])
         if g.norm(delta)>1e-5:DB.ElementTransformUtils.MoveElement(doc,element.Id,proposals.xyz(delta))
     doc.Regenerate()
+
+
+def _modifiable(element):
+    if element is None:raise ValueError('TRANSFORM_ELEMENT_MISSING')
+    if element.Pinned:raise ValueError('TRANSFORM_ELEMENT_PINNED')
+    if element.GroupId!=DB.ElementId.InvalidElementId:raise ValueError('TRANSFORM_ELEMENT_GROUPED')
+    if getattr(element,'Host',None) is not None:raise ValueError('TRANSFORM_ELEMENT_HOSTED')
+    if element.Document.IsReadOnly or not element.IsModifiable:raise ValueError('TRANSFORM_ELEMENT_READ_ONLY')
+
+
+def _rotate_elbows(doc,routes):
+    from ..revit.terminal_adapters import apply_pose
+    moved=[]
+    for route in routes:
+        pose=route.get('elbow_pose')
+        if not pose or abs(pose['rotation_rad'])<1e-8:continue
+        element=doc.GetElement(pose['element_key']);_modifiable(element)
+        apply_pose(doc,route['destination']);moved.append(element)
+    doc.Regenerate()
+    return moved
 
 
 def _curve_check(duct,route,tolerance_mm):
@@ -178,13 +202,39 @@ def _create(doc,route,cfg):
         'end_element_ids':{'source':rr.eid(ducts[0].Id),'destination':rr.eid(ducts[-1].Id)},'connection_envelopes':scopes}
 
 
+def _principal_continuity(doc,port,hrv_uid,network):
+    start=network_model.resolve(doc,port);queue=[start];seen=set();count=0
+    while queue and count<256:
+        connector=queue.pop();key=(rr.eid(connector.Owner.Id),int(connector.Id))
+        if key in seen:continue
+        seen.add(key);count+=1
+        for ref in connector.AllRefs:
+            if ref.ConnectorType!=DB.ConnectorType.End or ref.Owner.Id==connector.Owner.Id or not connector.IsConnectedTo(ref):continue
+            owner=ref.Owner
+            if owner.UniqueId==hrv_uid:
+                classification=str(ref.DuctSystemType)
+                return classification=='SupplyAir' if network=='SUPPLY' else classification in ('ReturnAir','ExhaustAir')
+            if not isinstance(owner,(DB.Mechanical.Duct,DB.Mechanical.FlexDuct)) and (not owner.Category or rr.eid(owner.Category.Id) not in (int(DB.BuiltInCategory.OST_DuctFitting),int(DB.BuiltInCategory.OST_DuctAccessory))):continue
+            manager=network_model.manager(owner)
+            if manager:queue.extend(c for c in manager.Connectors if c.Domain==DB.Domain.DomainHvac and c.ConnectorType==DB.ConnectorType.End and int(c.Id)!=int(ref.Id))
+    return False
+
+
 def audit(doc,proposal_id):
     records=[]
     for element in DB.FilteredElementCollector(doc).OfClass(DB.ExtensibleStorage.DataStorage):
         data=proposals.metadata(element)
         if data and data.get('kind')==KIND and data.get('proposal_id')==proposal_id:records.append(data)
-    failures=[];rows=[]
+    failures=[];rows=[];principals=set()
     for record in records:
+        principal=record.get('principal_source')
+        if principal and principal['id'] not in principals:
+            principals.add(principal['id'])
+            try:
+                connected=_principal_continuity(doc,principal,record['hrv_uid'],record['network_type'])
+                rows.append({'route_id':record['route_id'],'endpoint':'manifold_to_hrv','connected':connected})
+                if not connected:failures.append({'route_id':record['route_id'],'code':'MAIN_CONTINUITY_MISSING'})
+            except Exception as exc:failures.append({'route_id':record['route_id'],'code':'MAIN_CONTINUITY_UNRESOLVED','detail':str(exc)})
         for key in ('source','destination'):
             try:
                 target=_resolve(doc,record[key],record.get('network_type','SUPPLY'),False);owner=doc.GetElement(DB.ElementId(record['end_element_ids'][key]))
@@ -230,12 +280,26 @@ def commit(doc,p,approval_token,explicit=False,dry_run=False):
     group=DB.TransactionGroup(doc,'ARQ-T · Conexiones de ventilación V3');group.Start();tx=None;created=[]
     try:
         tx=DB.Transaction(doc,'ARQ-T · Aplicar distribución aprobada');tx.Start();_move_equipment(doc,plan['equipment_movements'])
+        rotated_elbows=_rotate_elbows(doc,plan['routes'])
+        if rotated_elbows:fresh=extractor.analyze_mep_geometry(doc,p.configuration)
         if plan['equipment_movements']:
             fresh=extractor.analyze_mep_geometry(doc,p.configuration)
             from ..revit.geometry_conflicts import inspect
             moved=[doc.GetElement(DB.ElementId(v['element_id'])) for v in plan['equipment_movements']]
             failures=inspect(doc,moved,fresh,constraints=p.configuration['constraints'],clearance_mm=p.configuration['design_clearance_mm'])
             if failures:raise ValueError('NATIVE_MOVED_EQUIPMENT_CONFLICT: '+str(failures))
+        if rotated_elbows:
+            from ..revit.geometry_conflicts import inspect,subtract
+            from ..revit.terminal_adapters import mount_scope
+            poses={pose['element_key']:pose for pose in plan['elbow_movements']};solids_by_id={}
+            for elbow in rotated_elbows:
+                pose=poses[elbow.UniqueId]
+                collar=mount_scope(doc,elbow,p.configuration['design_clearance_mm'],pose['terminal_uid'])
+                if collar is None:raise ValueError('ELBOW_MOUNT_SCOPE_UNRESOLVED')
+                trimmed=[subtract(solid,collar) for solid in rr.solids(elbow)]
+                solids_by_id[rr.eid(elbow.Id)]=[solid for solid in trimmed if solid.Volume>1e-9]
+            failures=inspect(doc,rotated_elbows,fresh,constraints=p.configuration['constraints'],clearance_mm=p.configuration['design_clearance_mm'],solids_by_id=solids_by_id)
+            if failures:raise ValueError('NATIVE_ELBOW_ROTATION_CONFLICT: '+str(failures))
         for route in plan['routes']:
             record=_create(doc,route,p.configuration);created.append(record)
         doc.Regenerate()
@@ -256,6 +320,9 @@ def commit(doc,p,approval_token,explicit=False,dry_run=False):
                 'end_ids':record['end_ids'],'end_element_ids':record['end_element_ids'],
                 'members':[rr.eid(e.Id) for e in record['ducts']+record['fittings']],
                 'geometry_status':'NATIVE_GEOMETRY_VALID','curve_checks':record['curve_checks']}
+            if p.configuration.get('routing_strategy')=='MANUAL_BUNDLE' and route.get('route_kind')=='BRANCH':
+                equipment=p.equipment[route['distributor_uid']]
+                payload.update(principal_source=descriptor(network_model.resolve(doc,equipment['main_port'])),hrv_uid=p.configuration['hrv_id'])
             proposals._tag(manifest,payload)
         report=audit(doc,p.proposal_id)
         if not report['native_connections_valid']:raise ValueError('NATIVE_AUDIT_FAILED: '+str(report['failures']))

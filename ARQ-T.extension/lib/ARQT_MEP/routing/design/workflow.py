@@ -45,7 +45,8 @@ def payload(catalog,configuration,selected,destinations,profile,clearance_mm):
     from .spatial import envelope
     envelope(profile,clearance_mm)
     configuration=copy.deepcopy(configuration)
-    configuration.update(hrv_id=selected['HRV'],equipment_assignments=assignments,routing_strategy='GLOBAL_RADIAL_V3')
+    strategy='MANUAL_BUNDLE' if configuration.get('routing_strategy')=='MANUAL_BUNDLE' else 'GLOBAL_RADIAL_V3'
+    configuration.update(hrv_id=selected['HRV'],equipment_assignments=assignments,routing_strategy=strategy)
     if configuration.get('main_connection'):configuration['main_connection']['kind']='RIGID_CIRCULAR'
     return {'configuration':configuration,'destinations':copy.deepcopy(destinations),
         'duct_profile':asdict(profile),'clearance_mm':clearance_mm}
@@ -60,6 +61,12 @@ def stage(proposal,busy=False):
 
 
 def summary(proposal):
+    if proposal is not None and proposal.configuration.get('routing_strategy')=='MANUAL_BUNDLE':
+        assigned=len(proposal.corridor_assignments)
+        if proposal.design_stage=='AXES':
+            valid=len(proposal.validation.get('valid_route_ids',[]))
+            return '{} ejes válidos de {} asignados · {} corredores manuales · modelo nativo pendiente'.format(valid,assigned,len(proposal.corridors))
+        return '{} corredores manuales · {} destinos asignados · dibuje, asigne rejillas y calcule los ejes'.format(len(proposal.corridors),assigned)
     if proposal is None:return 'Seleccione equipos y destinos. Generar corredores analiza el modelo y abre el resultado en planta.'
     graph=proposal.corridor_graph;stats=graph.get('stats',{})
     if proposal.configuration.get('routing_strategy')=='GLOBAL_RADIAL_V3':

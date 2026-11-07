@@ -2,7 +2,6 @@
 import copy
 import dataclasses
 from . import model,store
-from .graph import generate
 from ..core.spatial_model import build_spatial_model
 
 
@@ -32,6 +31,9 @@ def calculate_graph(p,options=None,cancelled=None):
     """Worker-only computation. No store writes or live Revit access."""
     if not p.snapshot or not p.profiles:raise ValueError('Analice el edificio y defina un perfil de conducto antes de generar corredores.')
     profile=model.DuctProfile(**next(iter(p.profiles.values())))
+    if p.configuration.get('routing_strategy')=='MANUAL_BUNDLE':
+        from .manual_bundle import calculate,prepare
+        return calculate(p,profile,options,cancelled) if (options or {}).get('task')=='AXES' else prepare(p)
     if (options or {}).get('task')=='AXES':
         from .axes import calculate
         return calculate(p,profile,options,cancelled)
@@ -41,6 +43,7 @@ def calculate_graph(p,options=None,cancelled=None):
         if cancelled and cancelled() and p.solver_state.get('selected_paths'):
             old=copy.deepcopy(p);old.corridor_graph['last_attempt']={'cancelled':True};return old
         return result
+    from .graph import generate
     levels=region_levels(p)
     if not levels:raise ValueError('No hay cámaras con una planta identificada en el ámbito.')
     anchors=[{'xyz_mm':t['position_mm'],'level_id':t['level_id']} for t in p.terminals.values()]

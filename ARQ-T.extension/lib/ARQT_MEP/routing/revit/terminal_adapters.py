@@ -167,12 +167,15 @@ def close_unused(doc,adapter,selected_id):
     return result
 
 
-def mount_scope(doc,adapter,clearance_mm):
+def mount_scope(doc,adapter,clearance_mm,terminal_uid=None):
     """Only the verified DN125 collar crossing the ceiling interface."""
     from . import proposals
     data=proposals.metadata(adapter)
-    if not data or data.get('kind')!=KIND:return None
-    terminal=doc.GetElement(data['terminal_uid'])
+    if terminal_uid is None:
+        if not data or data.get('kind')!=KIND:return None
+        terminal_uid=data['terminal_uid']
+    elif adapter.Symbol.FamilyName!=FAMILY:return None
+    terminal=doc.GetElement(terminal_uid)
     if terminal is None:raise ValueError('Rejilla del adaptador ausente.')
     lower=max(ports(adapter),key=lambda c:c.Radius)
     matches=[c for c in ports(terminal) if lower.IsConnectedTo(c)]

@@ -46,12 +46,15 @@ def dispatch(doc,operation,payload=None,allow_write=False):
             snapshot=extractor.analyze_mep_geometry(doc,configuration)
             p.snapshot=snapshot;p.geometry_revision=snapshot['geometry_revision'];p.configuration=configuration
             p.profiles={profile.profile_id:asdict(profile)}
+        if configuration.get('routing_strategy')=='MANUAL_BUNDLE':
+            from .manual_bundle import initialize
+            initialize(p)
         return store.create(p).to_dict()
     if operation=='routing_design_analyze':
         p=store.get(document_id,payload['proposal_id'])
         if p.revision!=payload['expected_revision']:raise ValueError('VERSION_CONFLICT')
         changed=revit_read.fingerprint(doc)!=p.background['fingerprint']
-        if changed and p.configuration.get('routing_strategy')!='GLOBAL_RADIAL_V3':raise ValueError('OUTDATED: el modelo ha cambiado; cree o actualice el contexto del trazador.')
+        if changed and p.configuration.get('routing_strategy') not in ('GLOBAL_RADIAL_V3','MANUAL_BUNDLE'):raise ValueError('OUTDATED: el modelo ha cambiado; cree o actualice el contexto del trazador.')
         profile=model.DuctProfile(**payload['duct_profile'])
         configuration=settings.validate(payload.get('configuration',p.configuration or equipment_selection.read(doc)))
         clearance=float(payload.get('clearance_mm',10))

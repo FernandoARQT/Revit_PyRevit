@@ -50,11 +50,12 @@ def primitives(points,bend_radius):
         angle=math.acos(max(-1,min(1,g.dot(incoming,outgoing))))
         if angle<1e-6:continue
         if angle>math.pi-1e-6:raise ValueError('Giro de 180° no construible.')
-        if bend_radius<=0:raise ValueError('Radio de giro no definido para una ruta con codos.')
-        trim=bend_radius*math.tan(angle/2);trims[i]=trim
+        radius=bend_radius[i] if isinstance(bend_radius,(list,tuple)) else bend_radius
+        if radius<=0:raise ValueError('Radio de giro no definido para una ruta con codos.')
+        trim=radius*math.tan(angle/2);trims[i]=trim
         start=g.sub(pts[i],g.mul(incoming,trim));end=g.add(pts[i],g.mul(outgoing,trim))
         toward_center=g.unit(g.sub(outgoing,g.mul(incoming,g.dot(incoming,outgoing))))
-        center=g.add(start,g.mul(toward_center,bend_radius));axis=g.unit(g.cross(incoming,outgoing))
+        center=g.add(start,g.mul(toward_center,radius));axis=g.unit(g.cross(incoming,outgoing))
         radial=g.sub(start,center);segments=max(2,math.ceil(angle/math.radians(5)))
         sampled=[]
         for j in range(segments+1):
@@ -62,8 +63,8 @@ def primitives(points,bend_radius):
             rotated=g.add(g.mul(radial,math.cos(theta)),g.mul(g.cross(axis,radial),math.sin(theta)))
             sampled.append(g.add(center,rotated))
         sampled[-1]=end
-        turns[i]={'kind':'ARC','start':start,'end':end,'center':center,'axis':axis,'radius_mm':bend_radius,
-                  'angle_rad':angle,'points_mm':sampled,'sagitta_mm':bend_radius*(1-math.cos(angle/segments/2))}
+        turns[i]={'kind':'ARC','start':start,'end':end,'center':center,'axis':axis,'radius_mm':radius,
+                  'angle_rad':angle,'points_mm':sampled,'sagitta_mm':radius*(1-math.cos(angle/segments/2))}
     for i,(a,b) in enumerate(zip(pts,pts[1:])):
         if trims[i]+trims[i+1]>g.distance(a,b)+1e-5:
             raise ValueError('Tramo insuficiente entre giros; aumente el espacio o revise el radio de curvatura.')
@@ -134,7 +135,11 @@ def validate_route_geometry(space,route,profile):
         controls=route.get('routing_points_mm',controls)
     if len(controls)<2 or all(g.distance(controls[0],p)<1e-6 for p in controls):
         return {'status':'INVALID','errors':['COINCIDENT_ENDPOINTS'],'primitives':[]}
-    try:pieces=primitives(controls,profile.bend_radius_mm)
+    try:
+        radii=route.get('corner_radii_mm',profile.bend_radius_mm)
+        if isinstance(radii,(list,tuple)) and (len(radii)!=len(controls) or any(r<profile.bend_radius_mm for r in radii)):
+            raise ValueError('Radio de carril inferior al mínimo o sin correspondencia con sus vértices.')
+        pieces=primitives(controls,radii)
     except ValueError as exc:return {'status':'INVALID','errors':[str(exc)],'primitives':[]}
     too_short=[i for i,p in enumerate(pieces) if (g.distance(p['start'],p['end']) if p['kind']=='LINE'
                else p['radius_mm']*p['angle_rad'])<profile.min_curve_length_mm]

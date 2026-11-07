@@ -104,7 +104,7 @@ def capture(document_id,proposal_id,expected_revision,snapshot,catalog,configura
             p.corridor_graph={}
             for cid in p.corridors:invalidate(p,cid)
             p.validation={};p.solver_state={}
-            if configuration.get('routing_strategy')!='GLOBAL_RADIAL_V3':p.history=[];p.future=[]
+            if configuration.get('routing_strategy') not in ('GLOBAL_RADIAL_V3','MANUAL_BUNDLE'):p.history=[];p.future=[]
             else:
                 for tid in p.connectivity:p.connectivity[tid]['status']='EDITED_PENDING_RECHECK'
         p.revision+=1;p.updated_utc=now();p=RoutingDesignProposal.from_dict(p.to_dict())

@@ -34,13 +34,17 @@
        <TextBlock Text="Distribuidor de impulsión" Foreground="#707782" Margin="0,11,0,4"/><ComboBox Name="SupplyManifold"/>
        <TextBlock Text="Distribuidor de extracción" Foreground="#707782" Margin="0,11,0,4"/><ComboBox Name="ExtractManifold"/>
        <TextBlock Name="EquipmentInfo" Foreground="#707782" TextWrapping="Wrap" FontSize="10.5" Margin="0,7,0,12"/>
-       <Expander Header="Destinos del estudio" IsExpanded="True" Margin="0,4,0,12"><StackPanel Margin="0,8,0,0">
+       <TextBlock Text="Distribuidor del corredor" FontWeight="Bold" Margin="0,6,0,5"/><ComboBox Name="ActiveManifold"/>
+       <Expander Header="Rejillas · selección y asignación" IsExpanded="True" Margin="0,10,0,12"><StackPanel Margin="0,8,0,0">
         <DataGrid Name="Terminals" Height="205" FontSize="10.5" CanUserSortColumns="False"><DataGrid.Columns>
          <DataGridCheckBoxColumn Header="Usar" Binding="{Binding Include,Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}" Width="42"/>
          <DataGridTextColumn Header="Destino" Binding="{Binding Label}" IsReadOnly="True" Width="*"/>
          <DataGridTextColumn Header="L/s" Binding="{Binding Flow}" IsReadOnly="True" Width="48"/>
+         <DataGridTextColumn Header="Corredor" Binding="{Binding Corridor}" IsReadOnly="True" Width="90"/>
         </DataGrid.Columns></DataGrid>
         <TextBlock Name="TerminalInfo" TextWrapping="Wrap" Foreground="#707782" FontSize="10.5" Margin="0,6,0,0"/>
+        <Button Name="AssignTerminals" Content="Asignar al corredor seleccionado" Margin="0,8,0,0"/>
+        <Button Name="RemoveTerminals" Content="Retirar selección del corredor" Margin="0,6,0,0"/>
        </StackPanel></Expander>
        <Expander Header="Parámetros del estudio"><StackPanel Margin="0,10,0,0">
         <TextBlock Text="Producto de los ramales" FontWeight="Bold" TextWrapping="Wrap"/><ComboBox Name="BranchProduct" Margin="0,6,0,0"/>
@@ -52,10 +56,11 @@
          <TextBox Name="Insulation" Grid.Row="3" Margin="0,0,8,10"/><TextBox Name="Clearance" Grid.Row="3" Grid.Column="1" Margin="0,0,0,10"/>
         </Grid>
         <TextBlock Text="Principales rígidas" FontWeight="Bold" Margin="0,5,0,6"/>
+        <CheckBox Name="IncludeMains" Content="Incluir creación de principales rígidas" IsChecked="True" Margin="0,0,0,7" ToolTip="Desactive para conservar principales existentes. Se comprobará su continuidad con el recuperador y se bloquearán movimientos que exijan reconstruirlas."/>
         <ComboBox Name="MainDuctType" ToolTip="Tipo rígido circular existente en Revit"/>
         <TextBlock Text="Nominal / exterior declarado / radio · mm" TextWrapping="Wrap" Margin="0,6,0,4"/>
         <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><TextBox Name="MainDiameter" Margin="0,0,5,0"/><TextBox Name="MainExterior" Grid.Column="1" Margin="0,0,5,0"/><TextBox Name="MainRadius" Grid.Column="2"/></Grid>
-        <TextBlock Text="Tiempo de cálculo externo" Margin="0,2,0,4"/><ComboBox Name="Budget"><ComboBoxItem Content="Rápido · 30 s"/><ComboBoxItem Content="Normal · 120 s"/><ComboBoxItem Content="Ampliado · 240 s"/><ComboBoxItem Content="Profundo · 600 s"/><ComboBoxItem Content="Extendido · 1000 s"/></ComboBox>
+        <TextBlock Text="Cálculo local de haces: hasta 30 s" Margin="0,8,0,4"/><ComboBox Name="Budget" Visibility="Collapsed"><ComboBoxItem Content="Rápido · 30 s"/><ComboBoxItem Content="Normal · 120 s"/><ComboBoxItem Content="Ampliado · 240 s"/><ComboBoxItem Content="Profundo · 600 s"/><ComboBoxItem Content="Extendido · 1000 s"/></ComboBox>
         <CheckBox Name="IncludeLinks" Content="Incluir modelos vinculados" Margin="0,10,0,0"/>
        </StackPanel></Expander>
        <TextBlock Name="AlternativeInfo" TextWrapping="Wrap" Foreground="#707782" FontSize="10.5" Margin="0,14,0,0"/>
@@ -69,7 +74,7 @@
    </Border>
    <Grid Grid.Column="2"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <DockPanel Margin="0,0,0,10">
-     <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"><ComboBox Name="Mode" Width="205" SelectedIndex="0" Margin="0,0,9,0"><ComboBoxItem Content="Corredores y ramificaciones"/><ComboBoxItem Content="Ejes de tubos"/></ComboBox><ComboBox Name="Level" Width="130" Margin="0,0,9,0"/><Button Name="FitPlan" Content="Ajustar"/></StackPanel>
+     <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"><ComboBox Name="Mode" Width="205" SelectedIndex="0" Margin="0,0,9,0"><ComboBoxItem Content="Corredores"/><ComboBoxItem Content="Ejes de tubos"/></ComboBox><ComboBox Name="Level" Width="130" Margin="0,0,9,0"/><Button Name="FitPlan" Content="Ajustar"/></StackPanel>
      <WrapPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
       <ComboBox Name="ManualNetwork" Width="112" SelectedIndex="2" Margin="0,0,6,0"><ComboBoxItem Content="Impulsión"/><ComboBoxItem Content="Extracción"/><ComboBoxItem Content="Compartido"/></ComboBox>
       <Button Name="DrawCorridor" Content="Dibujar corredor"/><Button Name="FinishDrawing" Content="Terminar" Visibility="Collapsed"/><Button Name="CancelDrawing" Content="Cancelar" Visibility="Collapsed"/>
@@ -79,7 +84,7 @@
     <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
      <Border Background="White" BorderBrush="#E2E4E8" BorderThickness="1" CornerRadius="5">
       <Grid><Canvas Name="Plan" ClipToBounds="True" Focusable="True"/>
-       <StackPanel Name="EmptyPlan" HorizontalAlignment="Center" VerticalAlignment="Center" Width="370" IsHitTestVisible="False"><TextBlock Text="El estudio empieza aquí" FontSize="21" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Text="Revise los equipos y pulse Generar corredores. La planta y sus corredores aparecerán en este espacio." Foreground="#707782" TextWrapping="Wrap" TextAlignment="Center" Margin="0,10,0,0"/></StackPanel>
+       <StackPanel Name="EmptyPlan" HorizontalAlignment="Center" VerticalAlignment="Center" Width="370" IsHitTestVisible="False"><TextBlock Text="Corredores manuales" FontSize="21" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Text="Prepare la planta, seleccione un distribuidor y dibuje su corredor. Después asigne las rejillas y calcule los tubos." Foreground="#707782" TextWrapping="Wrap" TextAlignment="Center" Margin="0,10,0,0"/></StackPanel>
       </Grid>
      </Border>
      <Border Name="SelectionPanel" Grid.Column="1" Width="236" Background="White" BorderBrush="#E2E4E8" BorderThickness="1" CornerRadius="5" Padding="12" Margin="10,0,0,0" Visibility="Collapsed">
@@ -96,10 +101,18 @@
        <Button Name="InsertPoint" Content="Añadir punto en un tramo" Margin="0,7,0,0" HorizontalAlignment="Stretch"/>
        <Button Name="DeletePoint" Content="Eliminar punto" Margin="0,7,0,0" HorizontalAlignment="Stretch"/>
        <Button Name="DeleteCorridor" Content="Eliminar corredor" Margin="0,16,0,0" Foreground="#B04737" HorizontalAlignment="Stretch"/>
+       <StackPanel Name="BranchWaypointPanel" Visibility="Collapsed" Margin="0,12,0,0">
+        <TextBlock Text="Punto de paso opcional del ramal" FontWeight="Bold" TextWrapping="Wrap"/>
+        <TextBlock Text="Un único punto XY. Doble clic sobre el tubo para colocarlo." TextWrapping="Wrap" Foreground="#707782" FontSize="10.5" Margin="0,5,0,6"/>
+        <TextBlock Text="X · mm"/><TextBox Name="BranchX"/><TextBlock Text="Y · mm" Margin="0,5,0,0"/><TextBox Name="BranchY"/>
+        <Button Name="SetBranchWaypoint" Content="Guardar punto de paso" Margin="0,7,0,0"/><Button Name="ClearBranchWaypoint" Content="Quitar punto de paso" Margin="0,7,0,0"/>
+        <TextBlock Text="Giro adicional del codo · grados" TextWrapping="Wrap" Margin="0,12,0,4"/><TextBox Name="ElbowAngle" ToolTip="Vacío: proponer orientación. 0: conservar la orientación actual. Solo se admiten los ángulos autorizados para la familia."/>
+        <Button Name="SetElbowAngle" Content="Guardar orientación del codo" Margin="0,7,0,0"/>
+       </StackPanel>
       </StackPanel></ScrollViewer>
      </Border>
     </Grid>
-    <DockPanel Grid.Row="2" Margin="0,8,0,0"><TextBlock FontSize="10.5"><Run Text="● Impulsión    " Foreground="#F47721"/><Run Text="● Extracción    " Foreground="#287CAB"/><Run Text="● Corredor compartido" Foreground="#8751A1"/></TextBlock><TextBlock DockPanel.Dock="Right" Text="Rueda: zoom · derecho/central: pan · doble clic: añadir punto" Foreground="#707782" FontSize="10.5" HorizontalAlignment="Right"/></DockPanel>
+    <DockPanel Grid.Row="2" Margin="0,8,0,0"><TextBlock FontSize="10.5"><Run Text="● Impulsión    " Foreground="#F47721"/><Run Text="● Extracción    " Foreground="#287CAB"/></TextBlock><TextBlock DockPanel.Dock="Right" Text="Rueda: zoom · derecho/central: pan · doble clic: añadir punto" Foreground="#707782" FontSize="10.5" HorizontalAlignment="Right"/></DockPanel>
    </Grid>
   </Grid>
   <DockPanel Grid.Row="2" Margin="0,12,0,0">

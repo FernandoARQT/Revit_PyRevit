@@ -31,7 +31,7 @@ def overlay(canvas,p,level_id,transform,selected=None,preview=None,vertices=()):
         if signature in seen and cid!=selected:continue
         seen.add(signature)
         pending=c.get('validation_status') in ('EDITED_PENDING_RECHECK','MANUAL_SCHEMATIC_INVALID')
-        invalid=c.get('validation_status') in ('INVALID','JOINT_COLLISION_CONFLICT','CORRIDOR_CAPACITY_CONFLICT')
+        invalid=c.get('validation_status') in ('INVALID','JOINT_COLLISION_CONFLICT','CORRIDOR_CAPACITY_CONFLICT','VERTICAL_CROSSING_REVIEW_REQUIRED')
         group=(c['network_type'],cid==selected,pending,invalid)
         if group not in groups:groups[group]=PathGeometry()
         figure=PathFigure();figure.StartPoint=Point(*screen[0]);figure.IsClosed=False
@@ -105,17 +105,31 @@ class CorridorCanvas(PlanCanvas):
             is_hrv=device['id']==p.configuration.get('hrv_id')
             ports=device.get('connectors',[])
             if not ports or not (role or is_hrv):continue
-            virtual=p.equipment.get(role,{}) if role else {}
+            virtual=next((v for v in p.equipment.values() if v['id']==device['id']),{}) if role else {}
             frame=virtual.get('proposed_transform')
             xy=frame['origin_mm'][:2] if frame else [sum(port['xyz_mm'][i] for port in ports)/len(ports) for i in (0,1)]
+            if self.drag and self.drag.get('kind')=='manifold' and self.drag['id']==device['id']:xy=self.drag.get('preview_xy',xy)
             if not any(polygon_from_rings(r['rings']).covers(XY(*xy)) for r in rooms):continue
             x,y=self.transform.to_screen(xy);brush=color('#343D49' if is_hrv else COLORS[role])
             square=Rectangle();square.Width=10;square.Height=10;square.Fill=brush;square.IsHitTestVisible=False
             Canvas.SetLeft(square,x-5);Canvas.SetTop(square,y-5);self.canvas.Children.Add(square)
             label=TextBlock();label.Text='REC' if is_hrv else 'DI' if role=='SUPPLY' else 'DE';label.FontSize=10;label.Foreground=brush;label.IsHitTestVisible=False
             Canvas.SetLeft(label,x+8);Canvas.SetTop(label,y-7);self.canvas.Children.Add(label)
+            if p.configuration.get('routing_strategy')=='MANUAL_BUNDLE' and role:self.hits.append(('manifold',device['id'],0,(x,y),(x,y)))
+        if p.configuration.get('routing_strategy')=='MANUAL_BUNDLE':
+            for tid,t in p.terminals.items():
+                if t['level_id']!=lid:continue
+                xy=self.transform.to_screen(t['position_mm'][:2]);self.hits.append(('terminal',tid,0,xy,xy))
+            for route in p.individual_routes.values():
+                xy=route.get('incident_xy_mm')
+                if xy is None:continue
+                x,y=self.transform.to_screen(xy);mark=Ellipse();mark.Width=12;mark.Height=12;mark.Stroke=color('#B04737');mark.StrokeThickness=2;mark.IsHitTestVisible=False
+                Canvas.SetLeft(mark,x-6);Canvas.SetTop(mark,y-6);self.canvas.Children.Add(mark)
 
     def nearest(self,screen):
+        devices=[(math.dist(screen,h[3]),h) for h in self.hits if h[0] in ('manifold','terminal')]
+        closest=min(devices,key=lambda x:x[0]) if devices else None
+        if closest and closest[0]<9:return closest[1]
         vertices=[(math.dist(screen,h[3]),h) for h in self.hits if h[0]=='vertex']
         closest=min(vertices,key=lambda x:x[0]) if vertices else None
         if closest and closest[0]<10:return closest[1]
@@ -138,7 +152,19 @@ class CorridorCanvas(PlanCanvas):
                 self.vertices.append(xy);self.draw();self.info('Corredor en dibujo · {} puntos · Enter termina · Esc cancela'.format(len(self.vertices)));return
             hit=self.nearest(screen)
             if hit is None:self.selected=None;self.select(None);self.draw();return
-            kind,cid,index,*_=hit;self.selected=cid;self.selected_vertex=index if kind=='vertex' else None;self.select(cid)
+            kind,cid,index,*_=hit
+            if kind=='terminal':
+                if hasattr(self,'select_terminal'):self.select_terminal(cid)
+                return
+            if kind=='manifold':
+                if hasattr(self,'select_manifold'):self.select_manifold(cid)
+                equipment=next(v for v in p.equipment.values() if v['id']==cid)
+                self.drag={'kind':'manifold','id':cid,'start':xy,'revision':p.revision,'origin':list(equipment['proposed_transform']['origin_mm'][:2])}
+                self.canvas.CaptureMouse();return
+            self.selected=cid;self.selected_vertex=index if kind=='vertex' else None;self.select(cid)
+            if getattr(self,'axis_read_only',lambda:False)():
+                if e.ClickCount>=2 and hasattr(self,'set_branch_point'):self.set_branch_point(cid,xy)
+                self.draw();return
             if self.mode=='insert_vertex' or e.ClickCount>=2:
                 if kind!='corridor':self.info('Pulse en el interior de un tramo para insertar un punto.');return
                 self.selected_vertex=index+1
@@ -153,6 +179,9 @@ class CorridorCanvas(PlanCanvas):
     def move(self,sender,e):
         if self.drag and self.drag['kind']=='pan':return super().move(sender,e)
         if not self.drag:return
+        if self.drag['kind']=='manifold':
+            xy=list(self.transform.to_model(self.position(e)));d=self.drag
+            d['preview_xy']=[d['origin'][i]+xy[i]-d['start'][i] for i in (0,1)];self.draw();return
         xy=list(self.transform.to_model(self.position(e)));d=self.drag;c=copy.deepcopy(d['original'])
         if d['kind']=='vertex':c['reference_xy_mm'][d['index']]=xy
         else:
@@ -165,6 +194,8 @@ class CorridorCanvas(PlanCanvas):
         d=self.drag;xy=list(self.transform.to_model(self.position(e)));self.drag=None;self.preview=None;self.canvas.ReleaseMouseCapture()
         try:
             if math.dist(xy,d['start'])<1e-6:self.draw();return
+            if d['kind']=='manifold':
+                self.request('move_manifold',{'distributor_uid':d['id'],'point_mm':[d['origin'][i]+xy[i]-d['start'][i] for i in (0,1)]},d['revision']);self.draw();return
             if d['kind']=='vertex':op='move_vertex';payload={'index':d['index'],'point_mm':xy}
             else:op='move_corridor';payload={'delta_mm':[xy[i]-d['start'][i] for i in (0,1)]}
             self.request(op,dict(payload,corridor_id=d['id']),d['revision'])
@@ -190,7 +221,9 @@ class CorridorCanvas(PlanCanvas):
             if e.Key==Key.Escape:self.cancel()
             elif p is None:return
             elif e.Key==Key.Enter:self.finish()
-            elif e.Key==Key.Delete and self.selected:self.request('delete_corridor',{'corridor_id':self.selected},p.revision)
+            elif e.Key==Key.Delete and self.selected:
+                if getattr(self,'axis_read_only',lambda:False)():self.request('set_branch_waypoint',{'route_id':self.selected,'point_mm':None},p.revision)
+                else:self.request('delete_corridor',{'corridor_id':self.selected},p.revision)
             elif Keyboard.Modifiers & ModifierKeys.Control and e.Key in (Key.Z,Key.Y):self.request('undo' if e.Key==Key.Z else 'redo',{},p.revision)
             else:return
             e.Handled=True
